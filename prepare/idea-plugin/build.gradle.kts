@@ -134,4 +134,3 @@ ideaPlugin {
     from(jar)
     from(sideJars)
 }
-
