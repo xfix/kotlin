@@ -16,6 +16,8 @@ val intellijUltimateEnabled : Boolean by rootProject.extra
 
 val springClasspath by configurations.creating
 
+val clionUnscrambledJarDir: File by rootProject.extra
+
 dependencies {
     if (intellijUltimateEnabled) {
         testRuntime(intellijUltimateDep())
@@ -41,6 +43,8 @@ dependencies {
     compile(project(":idea:idea-gradle")) { isTransitive = false }
     compile(project(":compiler:util")) { isTransitive = false }
     compile(project(":idea:idea-jps-common")) { isTransitive = false }
+    compile(project(":kotlin-ultimate:cidr-native")) { isTransitive = true }
+    compileOnly(fileTree(clionUnscrambledJarDir) { include("**/*.jar") })
     compileOnly(intellijCoreDep()) { includeJars("intellij-core") }
 
     if (intellijUltimateEnabled) {
