@@ -1,6 +1,5 @@
 
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
-import org.gradle.jvm.tasks.Jar
 
 description = "Kotlin IDEA Ultimate plugin"
 
@@ -187,6 +186,10 @@ val jar = runtimeJar(task<ShadowJar>("shadowJar")) {
     dependsOn("$communityPluginProject:shadowJar")
     val communityPluginJar = project(communityPluginProject).configurations["runtimeJar"].artifacts.files.singleFile
     from(zipTree(communityPluginJar), { exclude("META-INF/plugin.xml") })
+    val tasksSet = project(":kotlin-ultimate:cidr-native").getTasksByName("jar", false)
+    val jarTask = tasksSet.iterator().next()
+    dependsOn(jarTask)
+    from(jarTask.inputs.files)
     from(preparedResources, { include("META-INF/plugin.xml") })
     from(mainSourceSet.output)
     archiveName = "kotlin-plugin.jar"

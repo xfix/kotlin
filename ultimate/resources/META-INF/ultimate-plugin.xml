@@ -1,3 +1,25 @@
 <idea-plugin>
-    <depends optional="true" config-file="kotlin-nodejs.xml">NodeJS</depends>
+  <depends optional="true" config-file="kotlin-nodejs.xml">NodeJS</depends>
+
+  <project-components>
+    <component>
+      <implementation-class>org.jetbrains.konan.gradle.GradleKonanWorkspace</implementation-class>
+    </component>
+  </project-components>
+
+  <extensions defaultExtensionNs="org.jetbrains.kotlin.native">
+        <gradleLauncherProvider implementation="org.jetbrains.konan.gradle.execution.IdeaGradleKonanLauncherProvider"/>
+    </extensions>
+
+  <extensions defaultExtensionNs="com.intellij">
+        <projectTaskRunner implementation="org.jetbrains.konan.gradle.execution.GradleKonanProjectTaskRunner"/>
+
+        <configurationType implementation="org.jetbrains.konan.gradle.execution.GradleKonanAppRunConfigurationType"/>
+        <runConfigurationProducer implementation="org.jetbrains.konan.gradle.execution.GradleKonanTargetRunConfigurationProducer"/>
+        <executionTargetProvider implementation="org.jetbrains.konan.gradle.execution.GradleKonanExecutionTargetProvider"/>
+        <runLineMarkerContributor language="ObjectiveC"
+                                  implementationClass="org.jetbrains.konan.gradle.execution.GradleKonanTargetRunLineMarkerProvider"/>
+
+        <stepsBeforeRunProvider implementation="org.jetbrains.konan.gradle.execution.GradleKonanBuildBeforeRunTaskProvider"/>
+    </extensions>
 </idea-plugin>
