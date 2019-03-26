@@ -850,6 +850,10 @@ class ExpressionCodegen(
                 gen(expression.argument, Type.INT_TYPE, data)
                 StackValue.coerce(Type.INT_TYPE, typeMapper.mapType(expression.type.toKotlinType()), mv)
             }
+
+            IrTypeOperator.SAM_CONVERSION -> {
+                throw AssertionError("SAM conversion should've been lowered: ${expression.dump()}")
+            }
         }
         return expression.onStack
     }
