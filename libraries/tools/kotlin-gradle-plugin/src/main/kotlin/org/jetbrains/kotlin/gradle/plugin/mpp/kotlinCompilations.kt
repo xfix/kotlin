@@ -10,8 +10,7 @@ import org.gradle.api.Project
 import org.gradle.api.attributes.AttributeContainer
 import org.gradle.api.file.FileCollection
 import org.gradle.util.ConfigureUtil
-import org.jetbrains.kotlin.gradle.dsl.KotlinCommonOptions
-import org.jetbrains.kotlin.gradle.dsl.KotlinCompile
+import org.jetbrains.kotlin.gradle.dsl.*
 import org.jetbrains.kotlin.gradle.dsl.kotlinExtension
 import org.jetbrains.kotlin.gradle.dsl.multiplatformExtensionOrNull
 import org.jetbrains.kotlin.gradle.plugin.*
@@ -220,8 +219,14 @@ internal object CompilationSourceSetUtil {
         val compilationNamesBySourceSetName = compilationsBySourceSetCache.computeIfAbsent(project) { _ ->
             check(project.state.executed) { "Should only be computed after the project is evaluated" }
 
-            val compilations = project.multiplatformExtensionOrNull?.targets?.flatMap { it.compilations }
-                ?: return@computeIfAbsent null
+            val kotlinExtension = project.kotlinExtension
+            val targets = when (kotlinExtension) {
+                is KotlinMultiplatformExtension -> kotlinExtension.targets
+                is KotlinSingleTargetExtension -> listOf(kotlinExtension.target)
+                else -> emptyList()
+            }
+
+            val compilations = targets.flatMap { it.compilations }
 
             compilations
                 .flatMap { compilation -> compilation.allKotlinSourceSets.map { sourceSet -> compilation to sourceSet } }

@@ -11,8 +11,8 @@ import org.gradle.api.attributes.Usage
 import org.gradle.api.internal.component.SoftwareComponentInternal
 import org.gradle.api.plugins.BasePlugin
 import org.gradle.api.tasks.bundling.Jar
-import org.jetbrains.kotlin.gradle.dsl.KotlinCommonOptions
 import org.jetbrains.kotlin.gradle.dsl.multiplatformExtension
+import org.jetbrains.kotlin.gradle.dsl.multiplatformExtensionOrNull
 import org.jetbrains.kotlin.gradle.plugin.*
 import org.jetbrains.kotlin.gradle.plugin.KotlinCommonSourceSetProcessor
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetProcessor
@@ -187,7 +187,7 @@ class KotlinMetadataTargetConfigurator(kotlinPluginVersion: String) :
         val publishedVariantsNamesWithCompilation = getPublishedPlatformCompilations(project).mapKeys { it.key.name }
 
         val generateMetadata =
-            createGenerateProjectStructureMetadataTask(publishedVariantsNamesWithCompilation, sourceSetsWithMetadataCompilations)
+            createGenerateProjectStructureMetadataTask()
 
         allMetadataJar.from(project.files(Callable { generateMetadata.resultXmlFile }).builtBy(generateMetadata)) { spec ->
             spec.into("META-INF").rename { MULTIPLATFORM_PROJECT_METADATA_FILE_NAME }
@@ -230,42 +230,50 @@ class KotlinMetadataTargetConfigurator(kotlinPluginVersion: String) :
             .keys
     }
 
-    private fun getPublishedPlatformCompilations(project: Project): Map<KotlinUsageContext, KotlinCompilation<*>> {
-        val result = mutableMapOf<KotlinUsageContext, KotlinCompilation<*>>()
-
-        project.multiplatformExtension.targets.withType(AbstractKotlinTarget::class.java).forEach { target ->
-            if (target.platformType == KotlinPlatformType.common)
-                return@forEach
-
-            target.kotlinComponents
-                .filterIsInstance<SoftwareComponentInternal>()
-                .forEach { component ->
-                    component.usages
-                        .filterIsInstance<KotlinUsageContext>()
-                        .forEach { usage -> result[usage] = usage.compilation }
-                }
+    private fun Project.createGenerateProjectStructureMetadataTask(): GenerateProjectStructureMetadata =
+        tasks.create("generateSourceSetsMetainformation", GenerateProjectStructureMetadata::class.java) { task ->
+            task.kotlinProjectStructureMetadata = checkNotNull(buildKotlinProjectStructureMetadata(project))
         }
+}
 
-        return result
+internal fun buildKotlinProjectStructureMetadata(project: Project): KotlinProjectStructureMetadata? {
+    val sourceSetsWithMetadataCompilations =
+        project.multiplatformExtensionOrNull?.targets?.getByName(KotlinMultiplatformPlugin.METADATA_TARGET_NAME)?.compilations?.associate {
+            it.defaultSourceSet to it
+        } ?: return null
+
+    val publishedVariantsNamesWithCompilation = getPublishedPlatformCompilations(project).mapKeys { it.key.name }
+
+    return KotlinProjectStructureMetadata(
+        sourceSetNamesByVariantName = publishedVariantsNamesWithCompilation.mapValues { (_, compilation) ->
+            compilation.allKotlinSourceSets.filter { it in sourceSetsWithMetadataCompilations }.map { it.name }.toSet()
+        },
+        sourceSetsDependsOnRelation = sourceSetsWithMetadataCompilations.keys.associate { sourceSet ->
+            sourceSet.name to sourceSet.dependsOn.filter { it in sourceSetsWithMetadataCompilations }.map { it.name }.toSet()
+        },
+        sourceSetModuleDependencies = sourceSetsWithMetadataCompilations.keys.associate { sourceSet ->
+            sourceSet.name to project.configurations.getByName(sourceSet.apiConfigurationName).allDependencies.map {
+                it.group.orEmpty() to it.name
+            }.toSet()
+        }
+    )
+}
+
+internal fun getPublishedPlatformCompilations(project: Project): Map<KotlinUsageContext, KotlinCompilation<*>> {
+    val result = mutableMapOf<KotlinUsageContext, KotlinCompilation<*>>()
+
+    project.multiplatformExtension.targets.withType(AbstractKotlinTarget::class.java).forEach { target ->
+        if (target.platformType == KotlinPlatformType.common)
+            return@forEach
+
+        target.kotlinComponents
+            .filterIsInstance<SoftwareComponentInternal>()
+            .forEach { component ->
+                component.usages
+                    .filterIsInstance<KotlinUsageContext>()
+                    .forEach { usage -> result[usage] = usage.compilation }
+            }
     }
 
-    private fun Project.createGenerateProjectStructureMetadataTask(
-        publishedVariantsNamesWithCompilation: Map<String, KotlinCompilation<*>>,
-        sourceSetsWithMetadataCompilations: Map<KotlinSourceSet, AbstractKotlinCompilation<out KotlinCommonOptions>>
-    ): GenerateProjectStructureMetadata =
-        tasks.create("generateSourceSetsMetainformation", GenerateProjectStructureMetadata::class.java) { task ->
-            task.kotlinProjectStructureMetadata = KotlinProjectStructureMetadata(
-                sourceSetNamesByVariantName = publishedVariantsNamesWithCompilation.mapValues { (_, compilation) ->
-                    compilation.allKotlinSourceSets.filter { it in sourceSetsWithMetadataCompilations }.map { it.name }.toSet()
-                },
-                sourceSetsDependsOnRelation = sourceSetsWithMetadataCompilations.keys.associate { sourceSet ->
-                    sourceSet.name to sourceSet.dependsOn.filter { it in sourceSetsWithMetadataCompilations }.map { it.name }.toSet()
-                },
-                sourceSetModuleDependencies = sourceSetsWithMetadataCompilations.keys.associate { sourceSet ->
-                    sourceSet.name to project.configurations.getByName(sourceSet.apiConfigurationName).allDependencies.map {
-                        it.group.orEmpty() to it.name
-                    }.toSet()
-                }
-            )
-        }
+    return result
 }

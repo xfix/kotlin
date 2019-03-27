@@ -9,6 +9,7 @@ import org.gradle.api.Project
 import org.gradle.api.artifacts.ResolvedDependency
 import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
+import org.jetbrains.kotlin.gradle.targets.metadata.getPublishedPlatformCompilations
 
 internal class SourceSetVisibilityProvider(
     private val project: Project
@@ -16,10 +17,12 @@ internal class SourceSetVisibilityProvider(
     fun getVisibleSourceSetsExcludingDependsOn(
         visibleFrom: KotlinSourceSet,
         mppDependency: ResolvedDependency,
-        dependencyProjectMetadata: KotlinProjectStructureMetadata
+        dependencyProjectMetadata: KotlinProjectStructureMetadata,
+        otherProject: Project?
     ): Set<String> {
-        val visibleByThisSourceSet = getVisibleSourceSets(visibleFrom, mppDependency, dependencyProjectMetadata)
-        val visibleByParents = visibleFrom.dependsOn.map { getVisibleSourceSets(it, mppDependency, dependencyProjectMetadata) }
+        val visibleByThisSourceSet = getVisibleSourceSets(visibleFrom, mppDependency, dependencyProjectMetadata, otherProject)
+        val visibleByParents =
+            visibleFrom.dependsOn.map { getVisibleSourceSets(it, mppDependency, dependencyProjectMetadata, otherProject) }
 
         return visibleByThisSourceSet
             .filterTo(mutableSetOf()) { item -> visibleByParents.none { visibleThroughDependsOn -> item in visibleThroughDependsOn } }
@@ -29,11 +32,12 @@ internal class SourceSetVisibilityProvider(
     fun getVisibleSourceSets(
         visibleFrom: KotlinSourceSet,
         mppDependency: ResolvedDependency,
-        dependencyProjectMetadata: KotlinProjectStructureMetadata
+        dependencyProjectMetadata: KotlinProjectStructureMetadata,
+        otherProject: Project?
     ): Set<String> {
         val compilations = CompilationSourceSetUtil.compilationsBySourceSets(project).getValue(visibleFrom)
 
-        val visiblePlatformVariantNames = compilations
+        var visiblePlatformVariantNames: Set<String> = compilations
             .filter { it.target.platformType != KotlinPlatformType.common }
             .mapNotNullTo(mutableSetOf()) {
                 project.configurations.getByName(it.compileDependencyConfigurationName)
@@ -42,6 +46,14 @@ internal class SourceSetVisibilityProvider(
                     .find { it.moduleVersion?.group == mppDependency.moduleGroup && it.moduleVersion?.name == mppDependency.moduleName }
                     ?.variant?.displayName
             }
+
+        if (otherProject != null) {
+            val publishedVariants = getPublishedPlatformCompilations(otherProject).keys
+            visiblePlatformVariantNames = visiblePlatformVariantNames
+                .map { configurationName ->
+                    publishedVariants.first { it.dependencyConfigurationName == configurationName }.name
+                }.toSet()
+        }
 
         return dependencyProjectMetadata.sourceSetNamesByVariantName
             .filterKeys { it in visiblePlatformVariantNames }
