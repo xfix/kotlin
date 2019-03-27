@@ -172,8 +172,9 @@ class KotlinMultiplatformPlugin(
             targets
                 .withType(AbstractKotlinTarget::class.java).matching { it.publishable && it.name != METADATA_TARGET_NAME }
                 .all {
-                    if (it is KotlinAndroidTarget)
+                    if (it is KotlinAndroidTarget || it is KotlinMetadataTarget)
                         // Android targets have their variants created in afterEvaluate; TODO handle this better?
+                        // Kotlin Metadata targets rely on complete source sets hierearchy and cannot be inspected for publication earlier
                         project.whenEvaluated { it.createMavenPublications(publishing.publications) }
                     else
                         it.createMavenPublications(publishing.publications)
@@ -283,8 +284,15 @@ internal fun applyUserDefinedAttributes(target: AbstractKotlinTarget) {
     }
 }
 
-internal fun sourcesJarTask(compilation: KotlinCompilation<*>, componentName: String?, artifactNameAppendix: String): Jar {
-    val project = compilation.target.project
+internal fun sourcesJarTask(compilation: KotlinCompilation<*>, componentName: String?, artifactNameAppendix: String): Jar =
+    sourcesJarTask(compilation.target.project, lazy { compilation.allKotlinSourceSets }, componentName, artifactNameAppendix)
+
+internal fun sourcesJarTask(
+    project: Project,
+    sourceSets: Lazy<Set<KotlinSourceSet>>,
+    componentName: String?,
+    artifactNameAppendix: String
+): Jar {
     val taskName = lowerCamelCaseName(componentName, "sourcesJar")
 
     (project.tasks.findByName(taskName) as? Jar)?.let { return it }
@@ -295,7 +303,7 @@ internal fun sourcesJarTask(compilation: KotlinCompilation<*>, componentName: St
     }
 
     project.whenEvaluated {
-        compilation.allKotlinSourceSets.forEach { sourceSet ->
+        sourceSets.value.forEach { sourceSet ->
             result.from(sourceSet.kotlin) { copySpec ->
                 copySpec.into(sourceSet.name)
             }

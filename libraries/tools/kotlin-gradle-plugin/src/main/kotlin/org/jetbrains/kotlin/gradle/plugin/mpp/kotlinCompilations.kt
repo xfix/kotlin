@@ -1,7 +1,7 @@
- /*
- * Copyright 2010-2018 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license
- * that can be found in the license/LICENSE.txt file.
- */
+/*
+* Copyright 2010-2018 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license
+* that can be found in the license/LICENSE.txt file.
+*/
 
 package org.jetbrains.kotlin.gradle.plugin.mpp
 
@@ -99,38 +99,44 @@ abstract class AbstractKotlinCompilation<T : KotlinCommonOptions>(
             }
     }
 
-    override fun source(sourceSet: KotlinSourceSet) {
-        if (kotlinSourceSets.add(sourceSet)) {
+    internal fun addExactSourceSetsEagerly(sourceSets: Set<KotlinSourceSet>) {
+        with(target.project) {
             //TODO possibly issue with forced instantiation
-            target.project.whenEvaluated {
-                sourceSet.getSourceSetHierarchy().forEach { sourceSet ->
-                    val isCommonSource =
-                        CompilationSourceSetUtil.sourceSetsInMultipleCompilations(project)?.contains(sourceSet.name) ?: false
+            sourceSets.forEach { sourceSet ->
+                val isCommonSource =
+                    CompilationSourceSetUtil.sourceSetsInMultipleCompilations(project)?.contains(sourceSet.name) ?: false
 
-                    addSourcesToCompileTask(sourceSet, addAsCommonSources = isCommonSource)
+                addSourcesToCompileTask(sourceSet, addAsCommonSources = isCommonSource)
 
-                    // Use `forced = false` since `api`, `implementation`, and `compileOnly` may be missing in some cases like
-                    // old Java & Android projects:
-                    addExtendsFromRelation(apiConfigurationName, sourceSet.apiConfigurationName, forced = false)
-                    addExtendsFromRelation(implementationConfigurationName, sourceSet.implementationConfigurationName, forced = false)
-                    addExtendsFromRelation(compileOnlyConfigurationName, sourceSet.compileOnlyConfigurationName, forced = false)
+                // Use `forced = false` since `api`, `implementation`, and `compileOnly` may be missing in some cases like
+                // old Java & Android projects:
+                addExtendsFromRelation(apiConfigurationName, sourceSet.apiConfigurationName, forced = false)
+                addExtendsFromRelation(implementationConfigurationName, sourceSet.implementationConfigurationName, forced = false)
+                addExtendsFromRelation(compileOnlyConfigurationName, sourceSet.compileOnlyConfigurationName, forced = false)
 
-                    if (this@AbstractKotlinCompilation is KotlinCompilationToRunnableFiles<*>) {
-                        addExtendsFromRelation(runtimeOnlyConfigurationName, sourceSet.runtimeOnlyConfigurationName, forced = false)
-                    }
+                if (this@AbstractKotlinCompilation is KotlinCompilationToRunnableFiles<*>) {
+                    addExtendsFromRelation(runtimeOnlyConfigurationName, sourceSet.runtimeOnlyConfigurationName, forced = false)
+                }
 
-                    if (sourceSet.name != defaultSourceSetName) {
-                        kotlinExtension.sourceSets.findByName(defaultSourceSetName)?.let { defaultSourceSet ->
-                            // Temporary solution for checking consistency across source sets participating in a compilation that may
-                            // not be interconnected with the dependsOn relation: check the settings as if the default source set of
-                            // the compilation depends on the one added to the compilation:
-                            defaultSourceSetLanguageSettingsChecker.runAllChecks(
-                                defaultSourceSet,
-                                sourceSet
-                            )
-                        }
+                if (sourceSet.name != defaultSourceSetName) {
+                    kotlinExtension.sourceSets.findByName(defaultSourceSetName)?.let { defaultSourceSet ->
+                        // Temporary solution for checking consistency across source sets participating in a compilation that may
+                        // not be interconnected with the dependsOn relation: check the settings as if the default source set of
+                        // the compilation depends on the one added to the compilation:
+                        defaultSourceSetLanguageSettingsChecker.runAllChecks(
+                            defaultSourceSet,
+                            sourceSet
+                        )
                     }
                 }
+            }
+        }
+    }
+
+    final override fun source(sourceSet: KotlinSourceSet) {
+        if (kotlinSourceSets.add(sourceSet)) {
+            target.project.whenEvaluated {
+                addExactSourceSetsEagerly(sourceSet.getSourceSetHierarchy())
             }
         }
     }
@@ -198,28 +204,44 @@ internal fun KotlinCompilation<*>.disambiguateName(simpleName: String): String {
     )
 }
 
-private object CompilationSourceSetUtil {
-    // Cache the results per project
-    private val projectSourceSetsInMultipleCompilationsCache = WeakHashMap<Project, Set<String>>()
+internal object CompilationSourceSetUtil {
+    private data class TargetCompilationName(val targetName: String, val compilationName: String) {
+        fun toCompilation(project: Project): KotlinCompilation<*>? =
+            project.multiplatformExtensionOrNull?.targets?.getByName(targetName)?.compilations?.getByName(compilationName)
 
-    fun sourceSetsInMultipleCompilations(project: Project) =
-        projectSourceSetsInMultipleCompilationsCache.computeIfAbsent(project) { _ ->
+        companion object {
+            fun from(compilation: KotlinCompilation<*>) = TargetCompilationName(compilation.target.name, compilation.name)
+        }
+    }
+
+    private val compilationsBySourceSetCache = WeakHashMap<Project, Map<String, Set<TargetCompilationName>>>()
+
+    fun compilationsBySourceSets(project: Project): Map<KotlinSourceSet, Set<KotlinCompilation<*>>> {
+        val compilationNamesBySourceSetName = compilationsBySourceSetCache.computeIfAbsent(project) { _ ->
             check(project.state.executed) { "Should only be computed after the project is evaluated" }
 
             val compilations = project.multiplatformExtensionOrNull?.targets?.flatMap { it.compilations }
                 ?: return@computeIfAbsent null
 
-            val sources = compilations
+            compilations
                 .flatMap { compilation -> compilation.allKotlinSourceSets.map { sourceSet -> compilation to sourceSet } }
-                .groupingBy { (_, sourceSet) -> sourceSet }
-                .eachCount()
+                .groupBy(
+                    // Store only names to avoid memory leak through indirect references to the project
+                    { (_, sourceSet) -> sourceSet.name },
+                    valueTransform = { (compilation, _) -> TargetCompilationName.from(compilation) }
+                )
+                .mapValues { (_, compilations) -> compilations.toSet() }
+        }
 
-            HashSet<String>().apply {
-                for (entry in sources) {
-                    if (entry.value > 1) {
-                        add(entry.key.name)
-                    }
-                }
-            }
+        return compilationNamesBySourceSetName.entries.associate { (sourceSetName, compilationNames) ->
+            project.kotlinExtension.sourceSets.getByName(sourceSetName).to(
+                compilationNames.map { checkNotNull(it.toCompilation(project)) }.toSet()
+            )
+        }
+    }
+
+    fun sourceSetsInMultipleCompilations(project: Project) =
+        compilationsBySourceSets(project).mapNotNullTo(mutableSetOf()) { (sourceSet, compilations) ->
+            sourceSet.name.takeIf { compilations.size > 1 }
         }
 }

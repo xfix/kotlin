@@ -322,17 +322,20 @@ abstract class KotlinTargetConfigurator<KotlinCompilationType : KotlinCompilatio
         }
     }
 
+    protected open fun createJarTask(target: KotlinOnlyTarget<KotlinCompilationType>): Jar {
+        val result = target.project.tasks.create(target.artifactsTaskName, Jar::class.java)
+        result.description = "Assembles a jar archive containing the main classes."
+        result.group = BasePlugin.BUILD_GROUP
+        result.from(target.compilations.getByName(KotlinCompilation.MAIN_COMPILATION_NAME).output.allOutputs)
+        return result
+    }
+
     override fun configureArchivesAndComponent(target: KotlinOnlyTarget<KotlinCompilationType>) {
         val project = target.project
 
         val mainCompilation = target.compilations.getByName(KotlinCompilation.MAIN_COMPILATION_NAME)
 
-        val jar = project.tasks.create(target.artifactsTaskName, Jar::class.java)
-        jar.description = "Assembles a jar archive containing the main classes."
-        jar.group = BasePlugin.BUILD_GROUP
-        jar.from(mainCompilation.output.allOutputs)
-
-        val apiElementsConfiguration = project.configurations.getByName(target.apiElementsConfigurationName)
+        val jar = createJarTask(target)
 
         target.disambiguationClassifier?.let { jar.appendix = it.toLowerCase() }
 
@@ -343,6 +346,7 @@ abstract class KotlinTargetConfigurator<KotlinCompilationType : KotlinCompilatio
                 jarArtifact.builtBy(jar)
                 jarArtifact.type = ArtifactTypeDefinition.JAR_TYPE
 
+                val apiElementsConfiguration = project.configurations.getByName(target.apiElementsConfigurationName)
                 addJar(apiElementsConfiguration, jarArtifact)
 
                 if (mainCompilation is KotlinCompilationToRunnableFiles<*>) {
