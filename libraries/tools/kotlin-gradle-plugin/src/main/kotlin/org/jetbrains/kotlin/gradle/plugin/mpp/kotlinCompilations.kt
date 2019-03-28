@@ -11,8 +11,6 @@ import org.gradle.api.attributes.AttributeContainer
 import org.gradle.api.file.FileCollection
 import org.gradle.util.ConfigureUtil
 import org.jetbrains.kotlin.gradle.dsl.*
-import org.jetbrains.kotlin.gradle.dsl.kotlinExtension
-import org.jetbrains.kotlin.gradle.dsl.multiplatformExtensionOrNull
 import org.jetbrains.kotlin.gradle.plugin.*
 import org.jetbrains.kotlin.gradle.plugin.sources.defaultSourceSetLanguageSettingsChecker
 import org.jetbrains.kotlin.gradle.plugin.sources.getSourceSetHierarchy
@@ -205,8 +203,15 @@ internal fun KotlinCompilation<*>.disambiguateName(simpleName: String): String {
 
 internal object CompilationSourceSetUtil {
     private data class TargetCompilationName(val targetName: String, val compilationName: String) {
-        fun toCompilation(project: Project): KotlinCompilation<*>? =
-            project.multiplatformExtensionOrNull?.targets?.getByName(targetName)?.compilations?.getByName(compilationName)
+        fun toCompilation(project: Project): KotlinCompilation<*>? {
+            val kotlinExtension = project.kotlinExtension
+            val target = when (kotlinExtension) {
+                is KotlinMultiplatformExtension -> kotlinExtension.targets.findByName(targetName)
+                is KotlinSingleTargetExtension -> kotlinExtension.target.takeIf { it.name == targetName }
+                else -> null
+            }
+            return target?.compilations?.getByName(compilationName)
+        }
 
         companion object {
             fun from(compilation: KotlinCompilation<*>) = TargetCompilationName(compilation.target.name, compilation.name)
