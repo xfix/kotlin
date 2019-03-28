@@ -104,13 +104,13 @@ interface Server<out T : ServerBase> : ServerBase {
 
     abstract class Message<ServerType : ServerBase> : AnyMessage<ServerType>() {
         fun process(server: ServerType, output: ByteWriteChannelWrapper) = GlobalScope.async {
-            log.info("$server starts processing ${this@Message}")
+            log.fine("$server starts processing ${this@Message}")
             processImpl(server, {
-                log.info("$server finished processing ${this@Message}, sending output")
+                log.fine("$server finished processing ${this@Message}, sending output")
                 GlobalScope.async {
-                    log.info("$server starts sending ${this@Message} to output")
+                    log.fine("$server starts sending ${this@Message} to output")
                     output.writeObject(DefaultAuthorizableClient.MessageReply(messageId ?: -1, it))
-                    log.info("$server finished sending ${this@Message} to output")
+                    log.fine("$server finished sending ${this@Message} to output")
                 }
             })
         }

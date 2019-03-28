@@ -85,13 +85,13 @@ interface EventManager {
 }
 
 class EventManagerImpl : EventManager {
-    private val onCompilationFinished = arrayListOf<() -> Unit>()
+    val onCompilationFinished = arrayListOf<Any>()
 
-    override fun onCompilationFinished(f: () -> Unit) {
+    override inline fun onCompilationFinished(f: suspend () -> Unit) {
         onCompilationFinished.add(f)
     }
 
-    fun fireCompilationFinished() {
+    inline fun fireCompilationFinished() {
         onCompilationFinished.forEach { it() }
     }
 }
@@ -272,8 +272,8 @@ abstract class CompileServiceImplBase(
     protected abstract fun periodicSeldomCheck()
     protected abstract fun initiateElections()
 
-    protected data class StateForCompilation<ReporterT, MessageCollectorT>(
-        val daemonReporter: ReporterT,
+    protected data class StateForCompilation<MessageCollectorT>(
+        val daemonReporter: DaemonMessageReporter,
         val messageCollector: MessageCollectorT,
         val k2PlatformArgs: CommonCompilerArguments,
         val compiler: CLICompiler<CommonCompilerArguments>,
@@ -282,7 +282,7 @@ abstract class CompileServiceImplBase(
     )
 
 
-    protected inline fun <ServicesFacadeT, JpsServicesFacadeT, CompilationResultsT, MessageCollectorT, ReporterT> compileImpl(
+    protected inline fun <ServicesFacadeT, JpsServicesFacadeT, CompilationResultsT, MessageCollectorT> compileImpl(
         sessionId: Int,
         compilerArguments: Array<out String>,
         compilationOptions: CompilationOptions,
@@ -290,12 +290,12 @@ abstract class CompileServiceImplBase(
         compilationResults: CompilationResultsT,
         hasIncrementalCaches: JpsServicesFacadeT.() -> Boolean,
         createMessageCollector: (ServicesFacadeT, CompilationOptions) -> MessageCollectorT,
-        createReporter: (ServicesFacadeT, CompilationOptions) -> ReporterT,
+        createReporter: (ServicesFacadeT, CompilationOptions) -> DaemonMessageReporter,
         report: MessageCollectorT.(CompilerMessageSeverity, String) -> Unit,
-        handleJps: (StateForCompilation<ReporterT, MessageCollectorT>) -> CompileService.CallResult<Int>,
-        handleNonIncremental: (StateForCompilation<ReporterT, MessageCollectorT>) -> CompileService.CallResult<Int>,
-        handleIncremental: (StateForCompilation<ReporterT, MessageCollectorT>) -> CompileService.CallResult<Int>,
-        handleJs: (StateForCompilation<ReporterT, MessageCollectorT>) -> CompileService.CallResult<Int>
+        handleJps: (StateForCompilation<MessageCollectorT>) -> CompileService.CallResult<Int>,
+        handleNonIncremental: (StateForCompilation<MessageCollectorT>) -> CompileService.CallResult<Int>,
+        handleIncremental: (StateForCompilation<MessageCollectorT>) -> CompileService.CallResult<Int>,
+        handleJs: (StateForCompilation<MessageCollectorT>) -> CompileService.CallResult<Int>
     ) = kotlin.run {
         val messageCollector = createMessageCollector(servicesFacade, compilationOptions)
         val daemonReporter = createReporter(servicesFacade, compilationOptions)
@@ -320,33 +320,28 @@ abstract class CompileServiceImplBase(
             CompileService.CallResult.Good(ExitCode.COMPILATION_ERROR.code)
         } else when (compilationOptions.compilerMode) {
             CompilerMode.JPS_COMPILER -> {
-                val jpsServicesFacade = servicesFacade as JpsServicesFacadeT
-
+                servicesFacade as JpsServicesFacadeT
                 withIC(enabled = servicesFacade.hasIncrementalCaches()) {
-                    handleJps(state)
+                    log.info("handleJps")
+                    handleJps(state).also { log.info("handleJps - done") }
                 }
             }
             CompilerMode.NON_INCREMENTAL_COMPILER -> {
-                handleNonIncremental(state)
+                log.info("handleNonIncremental")
+                handleNonIncremental(state).also { log.info("handleNonIncremental - done") }
             }
             CompilerMode.INCREMENTAL_COMPILER -> {
                 state.gradleIncrementalArgs = compilationOptions as IncrementalCompilationOptions
                 state.gradleIncrementalServicesFacade = servicesFacade as IncrementalCompilerServicesFacade
 
                 when (targetPlatform) {
-                    CompileService.TargetPlatform.JVM -> {
-                        val k2jvmArgs = k2PlatformArgs as K2JVMCompilerArguments
-
-                        withIC {
-                            handleIncremental(state)
-                        }
+                    CompileService.TargetPlatform.JVM -> withIC {
+                        log.info("handleIncremental")
+                        handleIncremental(state).also { log.info("handleIncremental - done") }
                     }
-                    CompileService.TargetPlatform.JS -> {
-                        val k2jsArgs = k2PlatformArgs as K2JSCompilerArguments
-
-                        withJsIC {
-                            handleJs(state)
-                        }
+                    CompileService.TargetPlatform.JS -> withJsIC {
+                        log.info("handleJs")
+                        handleJs(state).also { log.info("handleJs - done") }
                     }
                     else -> throw IllegalStateException("Incremental compilation is not supported for target platform: $targetPlatform")
 
@@ -357,29 +352,27 @@ abstract class CompileServiceImplBase(
     }
 
 
-    protected inline fun <PerfT, EventMgrT> doCompileImpl(
+    protected inline fun doCompile(
         sessionId: Int,
-        beforeCompile: () -> Unit,
-        afterCompile: () -> Unit,
-        createProfiller: (DaemonOptions) -> PerfT,
-        checkedCompileAndGet: (EventMgrT, PerfT) -> Int
+        daemonMessageReporter: DaemonMessageReporter,
+        tracer: RemoteOperationsTracer?,
+        body: (EventManager, Profiler) -> ExitCode
     ): CompileService.CallResult<Int> = run {
         log.fine("alive!")
         withValidClientOrSessionProxy(sessionId) {
-            beforeCompile()
-            val rpcProfiler = createProfiller(daemonOptions)
+            tracer?.before("compile")
+            val rpcProfiler = if (daemonOptions.reportPerf) WallAndThreadTotalProfiler() else DummyProfiler()
             val eventManager = EventManagerImpl()
             try {
                 log.fine("trying get exitCode")
-                val exitCode = checkedCompileAndGet(
-                    eventManager as EventMgrT,
-                    rpcProfiler
-                )
+                val exitCode = checkedCompile(daemonMessageReporter, rpcProfiler) {
+                    body(eventManager, rpcProfiler).code
+                }
                 log.fine("got exitCode")
                 CompileService.CallResult.Good(exitCode)
             } finally {
                 eventManager.fireCompilationFinished()
-                afterCompile()
+                tracer?.after("compile")
             }
         }
     }
@@ -387,20 +380,15 @@ abstract class CompileServiceImplBase(
     fun Long.ms() = TimeUnit.NANOSECONDS.toMillis(this)
     fun Long.kb() = this / 1024
 
-    protected inline fun <R, ReporterT, PerfT, LambdaT> checkedCompileImpl(
-        daemonMessageReporter: ReporterT,
-        rpcProfiler: PerfT,
-        createProfiler: (DaemonOptions) -> PerfT,
-        withMeasure: PerfT.(Any?, LambdaT) -> R,
-        getTotalCounters: PerfT.() -> PerfCounters,
-        getCounters: PerfT.() -> Map<Any?, PerfCounters>,
-        report: ReporterT.(ReportSeverity, String) -> Unit,
-        body: LambdaT
+    protected inline fun <R> checkedCompile(
+        daemonMessageReporter: DaemonMessageReporter,
+        rpcProfiler: Profiler,
+        body: () -> R
     ): R {
         try {
-            val profiler = createProfiler(daemonOptions)
+            val profiler = if (daemonOptions.reportPerf) WallAndThreadAndMemoryTotalProfiler(withGC = false) else DummyProfiler()
 
-            val res = withMeasure(profiler, null, body)
+            val res = profiler.withMeasure(null, body)
 
             val endMem = if (daemonOptions.reportPerf) usedMemory(withGC = false) else 0L
 
@@ -798,7 +786,7 @@ class CompileServiceImpl(
             }
         })
 
-    private fun execJsIncrementalCompiler(
+    private inline fun execJsIncrementalCompiler(
         args: K2JSCompilerArguments,
         incrementalCompilationOptions: IncrementalCompilationOptions,
         servicesFacade: IncrementalCompilerServicesFacade,
@@ -810,7 +798,7 @@ class CompileServiceImpl(
         reporterFlush= { (it as RemoteICReporter).flush() }
     )
 
-    private fun execIncrementalCompiler(
+    private inline fun execIncrementalCompiler(
         k2jvmArgs: K2JVMCompilerArguments,
         incrementalCompilationOptions: IncrementalCompilationOptions,
         servicesFacade: IncrementalCompilerServicesFacade,
@@ -1232,23 +1220,6 @@ class CompileServiceImpl(
             }
         }
 
-    private fun doCompile(
-        sessionId: Int,
-        daemonMessageReporter: DaemonMessageReporter,
-        tracer: RemoteOperationsTracer?,
-        body: (EventManager, Profiler) -> ExitCode
-    ) = doCompileImpl(
-        sessionId,
-        beforeCompile= { tracer?.before("compile") },
-        afterCompile= { tracer?.after("compile") },
-        createProfiller= { daemonOptions -> if (daemonOptions.reportPerf) WallAndThreadTotalProfiler() else DummyProfiler() },
-        checkedCompileAndGet= { eventManager, rpcProfiler ->
-            checkedCompile(daemonMessageReporter, rpcProfiler) {
-                body(eventManager, rpcProfiler).code
-            }
-        }
-    )
-
     private fun createCompileServices(facade: CompilerCallbackServicesFacade, eventManager: EventManager, rpcProfiler: Profiler): Services {
         val builder = Services.Builder()
         if (facade.hasIncrementalCaches()) {
@@ -1275,19 +1246,6 @@ class CompileServiceImpl(
 
         return builder.build()
     }
-
-
-    private fun <R> checkedCompile(daemonMessageReporter: DaemonMessageReporter, rpcProfiler: Profiler, body: () -> R) =
-        checkedCompileImpl(
-            daemonMessageReporter,
-            rpcProfiler,
-            createProfiler= { opts -> if (opts.reportPerf) WallAndThreadAndMemoryTotalProfiler(withGC = false) else DummyProfiler() },
-            withMeasure= Profiler::withMeasure,
-            getTotalCounters = Profiler::getTotalCounters,
-            getCounters = Profiler::getCounters,
-            report= DaemonMessageReporter::report,
-            body= body
-        )
 
     override fun clearJarCache() {
         ZipHandler.clearFileAccessorCache()

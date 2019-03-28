@@ -7,7 +7,6 @@
 
 package org.jetbrains.kotlin.daemon.experimental
 
-import com.intellij.openapi.Disposable
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.impl.ZipHandler
 import com.intellij.openapi.vfs.impl.jar.CoreJarFileSystem
@@ -15,17 +14,11 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.actor
 import kotlinx.coroutines.channels.consumeEach
-import org.jetbrains.kotlin.build.DEFAULT_KOTLIN_SOURCE_FILES_EXTENSIONS
-import org.jetbrains.kotlin.build.JvmSourceRoot
 import org.jetbrains.kotlin.cli.common.CLICompiler
 import org.jetbrains.kotlin.cli.common.ExitCode
-import org.jetbrains.kotlin.cli.common.KOTLIN_COMPILER_ENVIRONMENT_KEEPALIVE_PROPERTY
-import org.jetbrains.kotlin.cli.common.arguments.*
-import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
+import org.jetbrains.kotlin.cli.common.arguments.K2JSCompilerArguments
+import org.jetbrains.kotlin.cli.common.arguments.K2JVMCompilerArguments
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
-import org.jetbrains.kotlin.cli.common.messages.MessageRenderer
-import org.jetbrains.kotlin.cli.common.messages.PrintingMessageCollector
-import org.jetbrains.kotlin.cli.common.modules.ModuleXmlParser
 import org.jetbrains.kotlin.cli.common.repl.ReplCheckResult
 import org.jetbrains.kotlin.cli.common.repl.ReplCodeLine
 import org.jetbrains.kotlin.cli.common.repl.ReplCompileResult
@@ -34,62 +27,32 @@ import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
 import org.jetbrains.kotlin.cli.metadata.K2MetadataCompiler
 import org.jetbrains.kotlin.config.Services
+import org.jetbrains.kotlin.daemon.CompileServiceImplBase
 import org.jetbrains.kotlin.daemon.CompilerSelector
-import org.jetbrains.kotlin.daemon.LazyClasspathWatcher
 import org.jetbrains.kotlin.daemon.common.*
-import org.jetbrains.kotlin.daemon.*
+import org.jetbrains.kotlin.daemon.experimental.CompileServiceTaskScheduler.*
 import org.jetbrains.kotlin.daemon.nowSeconds
 import org.jetbrains.kotlin.daemon.report.experimental.CompileServicesFacadeMessageCollector
 import org.jetbrains.kotlin.daemon.report.experimental.DaemonMessageReporterAsync
+import org.jetbrains.kotlin.daemon.report.experimental.RemoteICReporterAsync
 import org.jetbrains.kotlin.daemon.report.experimental.getICReporterAsync
-import org.jetbrains.kotlin.incremental.*
 import org.jetbrains.kotlin.incremental.components.LookupTracker
-import org.jetbrains.kotlin.incremental.multiproject.ModulesApiHistoryAndroid
-import org.jetbrains.kotlin.incremental.multiproject.ModulesApiHistoryJs
-import org.jetbrains.kotlin.incremental.multiproject.ModulesApiHistoryJvm
 import org.jetbrains.kotlin.incremental.parsing.classesFqNames
 import org.jetbrains.kotlin.load.kotlin.incremental.components.IncrementalCompilationComponents
-import org.jetbrains.kotlin.modules.Module
 import org.jetbrains.kotlin.progress.experimental.CompilationCanceledStatus
-import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.PrintStream
-import java.rmi.RemoteException
-import java.security.PrivateKey
 import java.util.*
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.logging.Level
 import java.util.logging.Logger
-import kotlin.concurrent.read
 import kotlin.concurrent.schedule
-import kotlin.concurrent.write
 import org.jetbrains.kotlin.daemon.common.experimental.socketInfrastructure.*
 import org.jetbrains.kotlin.daemon.common.experimental.*
 import io.ktor.network.sockets.*
-import org.jetbrains.kotlin.daemon.experimental.CompileServiceTaskScheduler.*
-import org.jetbrains.kotlin.daemon.report.experimental.RemoteICReporterAsync
+import org.jetbrains.kotlin.daemon.EventManager
+import org.jetbrains.kotlin.daemon.report.DaemonMessageReporter
 
 // TODO: this classes should replace their non-experimental versions eventually.
-
-interface EventManager {
-    suspend fun onCompilationFinished(f: suspend () -> Unit)
-}
-
-private class EventManagerImpl : EventManager {
-    private val onCompilationFinished = arrayListOf<suspend () -> Unit>()
-
-    @Throws(RemoteException::class)
-    override suspend fun onCompilationFinished(f: suspend () -> Unit) {
-        onCompilationFinished.add(f)
-    }
-
-    suspend fun fireCompilationFinished() {
-        onCompilationFinished.forEach { it() }
-    }
-}
 
 private class CompileServiceTaskScheduler(log: Logger) {
     interface CompileServiceTask
@@ -250,8 +213,10 @@ class CompileServiceServerSideImpl(
 
     override val lastUsedSeconds: Long
         get() = (if (scheduler.getReadLocksCnt() > 1 || scheduler.isShutdownActionInProgress()) nowSeconds() else _lastUsedSeconds).also {
-            log.fine("lastUsedSeconds .. isReadLockedCNT : ${scheduler.getReadLocksCnt()} , " +
-                             "shutdownActionInProgress : ${scheduler.isShutdownActionInProgress()}")
+            log.fine(
+                "lastUsedSeconds .. isReadLockedCNT : ${scheduler.getReadLocksCnt()} , " +
+                        "shutdownActionInProgress : ${scheduler.isShutdownActionInProgress()}"
+            )
         }
 
     private var securityData: SecurityData = generateKeysAndToken().also { sdata ->
@@ -371,9 +336,10 @@ class CompileServiceServerSideImpl(
         report = CompileServicesFacadeMessageCollector::report,
         handleJps = { (daemonReporter, messageCollector, k2PlatformArgs, compiler) ->
             doCompile(sessionId, daemonReporter, tracer = null) { eventManger, profiler ->
-                val services = createCompileServices(servicesFacade as CompilerCallbackServicesFacadeClientSide, eventManger, profiler).await()
+                val services =
+                    createCompileServices(servicesFacade as CompilerCallbackServicesFacadeClientSide, eventManger, profiler)
                 compiler.exec(messageCollector, services, k2PlatformArgs)
-            }.await()
+            }
         },
         handleNonIncremental = { (daemonReporter, messageCollector, k2PlatformArgs, compiler) ->
             doCompile(sessionId, daemonReporter, tracer = null) { _, _ ->
@@ -381,7 +347,7 @@ class CompileServiceServerSideImpl(
                 compiler.exec(messageCollector, Services.EMPTY, k2PlatformArgs).also {
                     log.fine("(in doCompile's body) - end")
                 }
-            }.await()
+            }
         },
         handleIncremental = { (daemonReporter, messageCollector, k2PlatformArgs, _, gradleIncrementalArgs, gradleIncrementalServicesFacade) ->
             doCompile(sessionId, daemonReporter, tracer = null) { _, _ ->
@@ -393,7 +359,7 @@ class CompileServiceServerSideImpl(
                     messageCollector,
                     daemonReporter
                 )
-            }.await()
+            }
         },
         handleJs = { (daemonReporter, messageCollector, k2PlatformArgs, _, gradleIncrementalArgs, gradleIncrementalServicesFacade) ->
             doCompile(sessionId, daemonReporter, tracer = null) { _, _ ->
@@ -404,7 +370,7 @@ class CompileServiceServerSideImpl(
                     compilationResults,
                     messageCollector
                 )
-            }.await()
+            }
         }
     )
 
@@ -417,7 +383,7 @@ class CompileServiceServerSideImpl(
     ) = execJsIncrementalCompilerImpl(
         args, incrementalCompilationOptions, compilerMessageCollector,
         getICReporterAsync(servicesFacade, compilationResults, incrementalCompilationOptions),
-        reporterFlush= { (it as RemoteICReporterAsync).flush() }
+        reporterFlush = { (it as RemoteICReporterAsync).flush() }
     )
 
     private fun execIncrementalCompiler(
@@ -426,12 +392,12 @@ class CompileServiceServerSideImpl(
         servicesFacade: IncrementalCompilerServicesFacadeAsync,
         compilationResults: CompilationResultsAsync?,
         compilerMessageCollector: MessageCollector,
-        daemonMessageReporterAsync: DaemonMessageReporterAsync
+        daemonMessageReporterAsync: DaemonMessageReporter
     ) = execIncrementalCompilerImpl(
         k2jvmArgs, incrementalCompilationOptions,
         compilerMessageCollector,
         getICReporterAsync(servicesFacade, compilationResults, incrementalCompilationOptions),
-        reporterFlush= { (it as RemoteICReporterAsync).flush() },
+        reporterFlush = { (it as RemoteICReporterAsync).flush() },
         daemonMessageReporterReport = daemonMessageReporterAsync::report
     )
 
@@ -741,30 +707,11 @@ class CompileServiceServerSideImpl(
         }
     }
 
-    private fun doCompile(
-        sessionId: Int,
-        daemonMessageReporterAsync: DaemonMessageReporterAsync,
-        tracer: RemoteOperationsTracer?,
-        body: suspend (EventManager, ProfilerAsync) -> ExitCode
-    ) = GlobalScope.async {
-        doCompileImpl(
-            sessionId,
-            beforeCompile = { tracer?.before("compile") },
-            afterCompile = { tracer?.after("compile") },
-            createProfiller = { daemonOptions -> if (daemonOptions.reportPerf) WallAndThreadTotalProfilerAsync() else DummyProfilerAsync() },
-            checkedCompileAndGet = { eventManager, rpcProfiler ->
-                checkedCompile(daemonMessageReporterAsync, rpcProfiler) {
-                    body(eventManager, rpcProfiler).code
-                }.await()
-            }
-        )
-    }
-
-    private fun createCompileServices(
+    private inline fun createCompileServices(
         facade: CompilerCallbackServicesFacadeClientSide,
         eventManager: EventManager,
-        rpcProfiler: ProfilerAsync
-    ): Deferred<Services> = GlobalScope.async {
+        rpcProfiler: Profiler
+    ): Services {
         val builder = Services.Builder()
         if (facade.hasIncrementalCaches()) {
             builder.register(
@@ -781,25 +728,7 @@ class CompileServiceServerSideImpl(
         } else {
             log.fine("facade.hasCompilationCanceledStatus() = false")
         }
-        builder.build()
-    }
-
-
-    private fun <R> checkedCompile(
-        daemonMessageReporterAsync: DaemonMessageReporterAsync,
-        rpcProfiler: ProfilerAsync,
-        body: suspend () -> R
-    ) = GlobalScope.async {
-        checkedCompileImpl(
-            daemonMessageReporterAsync,
-            rpcProfiler,
-            createProfiler= { opts -> if (opts.reportPerf) WallAndThreadAndMemoryTotalProfilerAsync(withGC = false) else DummyProfilerAsync() },
-            withMeasure= ProfilerAsync::withMeasure,
-            getTotalCounters = ProfilerAsync::getTotalCounters,
-            getCounters = ProfilerAsync::getCounters,
-            report= DaemonMessageReporterAsync::report,
-            body= body
-        )
+        return builder.build()
     }
 
     override suspend fun clearJarCache() {

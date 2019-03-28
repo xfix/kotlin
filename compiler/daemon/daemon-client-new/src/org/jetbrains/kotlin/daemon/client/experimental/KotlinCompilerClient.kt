@@ -189,6 +189,7 @@ class KotlinCompilerClient : KotlinCompilerDaemonClient {
         port: Int,
         profiler: Profiler
     ): Int = profiler.withMeasure(this) {
+        log.info("Compile")
         val services = BasicCompilerServicesWithResultsFacadeServerServerSide(
             messageCollector,
             outputsCollector,

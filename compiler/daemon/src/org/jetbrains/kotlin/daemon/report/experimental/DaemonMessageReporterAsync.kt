@@ -10,16 +10,13 @@ import org.jetbrains.kotlin.daemon.common.CompilationOptions
 import org.jetbrains.kotlin.daemon.common.ReportCategory
 import org.jetbrains.kotlin.daemon.common.ReportSeverity
 import org.jetbrains.kotlin.daemon.common.CompilerServicesFacadeBaseAsync
+import org.jetbrains.kotlin.daemon.report.DaemonMessageReporter
 import java.io.PrintStream
-
-internal interface DaemonMessageReporterAsync {
-    fun report(severity: ReportSeverity, message: String)
-}
 
 internal fun DaemonMessageReporterAsync(
     servicesFacade: CompilerServicesFacadeBaseAsync,
     compilationOptions: CompilationOptions
-): DaemonMessageReporterAsync =
+): DaemonMessageReporter =
     if (ReportCategory.DAEMON_MESSAGE.code in compilationOptions.reportCategories) {
         val mySeverity = ReportSeverity.fromCode(compilationOptions.reportSeverity)!!
         DaemonMessageReporterAsyncAsyncImpl(servicesFacade, mySeverity)
@@ -27,7 +24,7 @@ internal fun DaemonMessageReporterAsync(
         DummyDaemonMessageReporterAsync
     }
 
-internal class DaemonMessageReporterAsyncPrintStreamAdapter(private val out: PrintStream) : DaemonMessageReporterAsync {
+internal class DaemonMessageReporterAsyncPrintStreamAdapter(private val out: PrintStream) : DaemonMessageReporter {
     override fun report(severity: ReportSeverity, message: String) {
         out.print("[Kotlin compile daemon][$severity] $message")
     }
@@ -36,7 +33,7 @@ internal class DaemonMessageReporterAsyncPrintStreamAdapter(private val out: Pri
 private class DaemonMessageReporterAsyncAsyncImpl(
     private val servicesFacade: CompilerServicesFacadeBaseAsync,
     private val mySeverity: ReportSeverity
-) : DaemonMessageReporterAsync {
+) : DaemonMessageReporter {
     override fun report(severity: ReportSeverity, message: String) {
         GlobalScope.async {
             if (severity.code <= mySeverity.code) {
@@ -46,7 +43,7 @@ private class DaemonMessageReporterAsyncAsyncImpl(
     }
 }
 
-private object DummyDaemonMessageReporterAsync : DaemonMessageReporterAsync {
+private object DummyDaemonMessageReporterAsync : DaemonMessageReporter {
     override fun report(severity: ReportSeverity, message: String) {
     }
 }
