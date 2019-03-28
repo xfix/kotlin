@@ -234,7 +234,9 @@ private class JarArtifactMppDependencyMetadataExtractor(
             val metadata = zip.getEntry("META-INF/$MULTIPLATFORM_PROJECT_METADATA_FILE_NAME")
                 ?: return null
 
-            val metadataXmlDocument = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(zip.getInputStream(metadata))
+            val metadataXmlDocument = zip.getInputStream(metadata).use { inputStream ->
+                DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(inputStream)
+            }
             parseKotlinSourceSetMetadataFromXml(metadataXmlDocument)
         }
     }
@@ -264,9 +266,11 @@ private class JarArtifactMppDependencyMetadataExtractor(
                             if (entry.isDirectory) return@forEachEntry
                             val newEntry = ZipEntry(entry.name.substringAfter("/"))
 
-                            zipOutput.putNextEntry(newEntry)
-                            zipOutput.write(zip.getInputStream(entry).readBytes())
-                            zipOutput.closeEntry()
+                            zip.getInputStream(entry).use { inputStream ->
+                                zipOutput.putNextEntry(newEntry)
+                                zipOutput.write(inputStream.readBytes())
+                                zipOutput.closeEntry()
+                            }
                         }
                     }
                 }
