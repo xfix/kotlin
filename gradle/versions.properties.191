@@ -1,4 +1,5 @@
-versions.intellijSdk=191.5109.14
+#Version could be switched back to a release version after IDEA with version >= 191.6183.87 is released
+versions.intellijSdk=191-EAP-SNAPSHOT
 versions.androidBuildTools=r23.0.1
 versions.idea.NodeJS=181.3494.12
 versions.jar.asm-all=7.0
