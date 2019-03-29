@@ -99,6 +99,10 @@ public abstract class AbstractBlackBoxCodegenTest extends CodegenTestCase {
     }
 
     protected void blackBox(boolean reportProblems) {
+        blackBox(myFiles, reportProblems);
+    }
+
+    protected void blackBox(@NotNull CodegenTestFiles myFiles, boolean reportProblems) {
         // If there are many files, the first 'box(): String' function will be executed.
         GeneratedClassLoader generatedClassLoader = generateAndCreateClassLoader(reportProblems);
         for (KtFile firstFile : myFiles.getPsiFiles()) {
@@ -114,7 +118,7 @@ public abstract class AbstractBlackBoxCodegenTest extends CodegenTestCase {
             }
             catch (Throwable e) {
                 if (reportProblems) {
-                    System.out.println(generateToText());
+                    System.out.println(generateToText(myFiles));
                 }
                 throw ExceptionUtilsKt.rethrow(e);
             }

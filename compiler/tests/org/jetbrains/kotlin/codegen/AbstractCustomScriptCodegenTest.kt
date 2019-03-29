@@ -68,7 +68,7 @@ abstract class AbstractCustomScriptCodegenTest : CodegenTestCase() {
 
         createEnvironmentWithMockJdkAndIdeaAnnotations(configurationKind, files, TestJdkKind.FULL_JDK)
 
-        myFiles = CodegenTestFiles.create(file.name, content, myEnvironment.project)
+        val myFiles = CodegenTestFiles.create(file.name, content, myEnvironment.project)
 
         try {
             val scriptClass = generateClass(myFiles.psiFile.script!!.fqName.asString())
@@ -82,7 +82,7 @@ abstract class AbstractCustomScriptCodegenTest : CodegenTestCase() {
             val expectedFields = extractAllKeyValPairs(content, "expected:")
             checkExpectedFields(expectedFields, scriptClass, scriptInstance)
         } catch (e: Throwable) {
-            println(generateToText())
+            println(generateToText(myFiles))
             throw e
         }
     }

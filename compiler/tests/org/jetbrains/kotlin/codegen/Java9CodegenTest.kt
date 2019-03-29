@@ -16,9 +16,11 @@ import java.util.concurrent.TimeUnit
 
 // TODO: merge into main codegen box tests somehow
 class Java9CodegenTest : AbstractBlackBoxCodegenTest() {
+    lateinit var fileName: String
+
     override fun setUp() {
         super.setUp()
-        val fileName = KotlinTestUtils.getTestDataPathBase() + "/codegen/" + prefix + "/" + getTestName(true) + ".kt"
+        fileName = KotlinTestUtils.getTestDataPathBase() + "/codegen/" + prefix + "/" + getTestName(true) + ".kt"
         val testFile = TestFile(fileName, File(fileName).readText())
         createEnvironmentWithMockJdkAndIdeaAnnotations(ConfigurationKind.NO_KOTLIN_REFLECT, listOf(testFile), TestJdkKind.FULL_JDK_9)
     }
@@ -48,7 +50,8 @@ class Java9CodegenTest : AbstractBlackBoxCodegenTest() {
     }
 
     fun testVarHandle() {
-        loadFile()
-        blackBox(true)
+        val file = File(fileName)
+        val myFiles = CodegenTestFiles.create(file.name, file.readText(), myEnvironment.project)
+        blackBox(myFiles, true)
     }
 }
