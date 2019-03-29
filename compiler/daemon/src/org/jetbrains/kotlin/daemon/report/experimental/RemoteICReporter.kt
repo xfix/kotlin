@@ -8,20 +8,17 @@ package org.jetbrains.kotlin.daemon.report.experimental
 import kotlinx.coroutines.*
 import org.jetbrains.kotlin.cli.common.ExitCode
 import org.jetbrains.kotlin.daemon.common.*
+import org.jetbrains.kotlin.daemon.report.RemoteICReporter
 import org.jetbrains.kotlin.incremental.ICReporter
 import org.jetbrains.kotlin.incremental.ICReporterBase
 import java.io.File
 import java.io.Serializable
 
-internal interface RemoteICReporterAsync: ICReporter {
-    fun flush()
-}
-
 internal class DebugMessagesICReporterAsync(
         private val servicesFacade: CompilerServicesFacadeBaseAsync,
         rootDir: File,
         private val isVerbose: Boolean
-) : ICReporterBase(rootDir), RemoteICReporterAsync {
+) : ICReporterBase(rootDir), RemoteICReporter {
     override fun report(message: () -> String) {
         GlobalScope.async {
             servicesFacade.report(
@@ -46,7 +43,7 @@ internal class DebugMessagesICReporterAsync(
 
 internal class CompileIterationICReporterAsync(
         private val compilationResults: CompilationResultsAsync?
-) : ICReporterBase(), RemoteICReporterAsync {
+) : ICReporterBase(), RemoteICReporter {
     override fun reportCompileIteration(incremental: Boolean, sourceFiles: Collection<File>, exitCode: ExitCode) {
         GlobalScope.async {
             compilationResults?.add(
@@ -70,7 +67,7 @@ internal class BuildReportICReporterAsync(
         private val compilationResults: CompilationResultsAsync?,
         rootDir: File,
         private val isVerbose: Boolean = false
-) : ICReporterBase(rootDir), RemoteICReporterAsync {
+) : ICReporterBase(rootDir), RemoteICReporter {
     private val icLogLines = arrayListOf<String>()
     private val recompilationReason = HashMap<File, String>()
 
@@ -106,8 +103,8 @@ internal class BuildReportICReporterAsync(
     }
 }
 
-internal class CompositeICReporterAsync(private val reporters: Iterable<RemoteICReporterAsync>) :
-        RemoteICReporterAsync {
+internal class CompositeICReporterAsync(private val reporters: Iterable<RemoteICReporter>) :
+    RemoteICReporter {
     override fun report(message: () -> String) {
         reporters.forEach { it.report(message) }
     }
@@ -141,9 +138,9 @@ internal fun getICReporterAsync(
         servicesFacade: CompilerServicesFacadeBaseAsync,
         compilationResults: CompilationResultsAsync?,
         compilationOptions: IncrementalCompilationOptions
-): RemoteICReporterAsync {
+): RemoteICReporter {
     val root = compilationOptions.modulesInfo.projectRoot
-    val reporters = ArrayList<RemoteICReporterAsync>()
+    val reporters = ArrayList<RemoteICReporter>()
 
     if (ReportCategory.IC_MESSAGE.code in compilationOptions.reportCategories) {
         val isVerbose = compilationOptions.reportSeverity == ReportSeverity.DEBUG.code

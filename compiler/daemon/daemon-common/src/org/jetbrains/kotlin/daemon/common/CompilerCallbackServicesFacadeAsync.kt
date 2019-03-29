@@ -39,7 +39,7 @@ interface CompilerCallbackServicesFacadeAsync : CompilerServicesFacadeBaseAsync 
     // LookupTracker
     suspend fun lookupTracker_requiresPosition(): Boolean
 
-    suspend fun lookupTracker_record(lookups: Collection<LookupInfo>)
+    fun lookupTracker_record(lookups: Collection<LookupInfo>)
 
     suspend fun lookupTracker_isDoNothing(): Boolean
 

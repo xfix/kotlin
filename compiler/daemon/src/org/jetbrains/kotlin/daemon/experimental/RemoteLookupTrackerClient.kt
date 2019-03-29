@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.daemon.common.experimental.CompilerCallbackServicesF
 import org.jetbrains.kotlin.daemon.common.DummyProfiler
 import org.jetbrains.kotlin.daemon.common.Profiler
 import org.jetbrains.kotlin.daemon.common.withMeasure
+import org.jetbrains.kotlin.daemon.common.withMeasureBlocking
 import org.jetbrains.kotlin.incremental.components.LookupInfo
 import org.jetbrains.kotlin.incremental.components.LookupTracker
 import org.jetbrains.kotlin.incremental.components.Position
@@ -46,10 +47,10 @@ class RemoteLookupTrackerClient(
         }
     }
 
-    private suspend fun flush() {
+    private fun flush() {
         if (isDoNothing || lookups.isEmpty()) return
 
-        profiler.withMeasure(this) {
+        profiler.withMeasureBlocking(this) {
             facade.lookupTracker_record(lookups)
         }
 

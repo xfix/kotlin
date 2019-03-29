@@ -74,7 +74,7 @@ open class CompilerCallbackServicesFacadeServerServerSide(
 
     override suspend fun lookupTracker_requiresPosition() = lookupTracker!!.requiresPosition
 
-    override suspend fun lookupTracker_record(lookups: Collection<LookupInfo>) {
+    override fun lookupTracker_record(lookups: Collection<LookupInfo>) {
         val lookupTracker = lookupTracker!!
 
         for (it in lookups) {

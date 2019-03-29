@@ -84,7 +84,7 @@ class CompilerCallbackServicesFacadeClientSideImpl(serverPort: Int) : CompilerCa
         return readMessage(id)
     }
 
-    override suspend fun lookupTracker_record(lookups: Collection<LookupInfo>) =
+    override fun lookupTracker_record(lookups: Collection<LookupInfo>) =
         sendNoReplyMessage(CompilerCallbackServicesFacadeServerSide.LookupTracker_recordMessage(lookups))
 
     override suspend fun lookupTracker_isDoNothing(): Boolean {

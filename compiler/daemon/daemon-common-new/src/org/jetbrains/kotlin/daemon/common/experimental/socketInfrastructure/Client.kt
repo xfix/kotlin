@@ -19,7 +19,7 @@ interface Client<ServerType : ServerBase> : Serializable, AutoCloseable {
     suspend fun connectToServer()
 
     suspend fun sendMessage(msg: AnyMessage<out ServerType>): Int // returns message unique id
-    suspend fun sendNoReplyMessage(msg: AnyMessage<out ServerType>)
+    fun sendNoReplyMessage(msg: AnyMessage<out ServerType>)
     suspend fun <T> readMessage(id: Int): T
 
 }
@@ -95,8 +95,8 @@ abstract class DefaultAuthorizableClient<ServerType : ServerBase>(
         return idVal as Int
     }
 
-    override suspend fun sendNoReplyMessage(msg: AnyMessage<out ServerType>) {
-        writeActor.send(SendNoreplyMessageQuery(msg))
+    override fun sendNoReplyMessage(msg: AnyMessage<out ServerType>) {
+        writeActor.offer(SendNoreplyMessageQuery(msg))
     }
 
     override suspend fun <T> readMessage(id: Int): T {
@@ -252,7 +252,7 @@ class DefaultClientRMIWrapper<ServerType : ServerBase> : Client<ServerType> {
     override suspend fun sendMessage(msg: AnyMessage<out ServerType>) =
         throw UnsupportedOperationException("sendMessage is not supported for RMI wrappers")
 
-    override suspend fun sendNoReplyMessage(msg: AnyMessage<out ServerType>) =
+    override fun sendNoReplyMessage(msg: AnyMessage<out ServerType>) =
         throw UnsupportedOperationException("sendMessage is not supported for RMI wrappers")
 
     override suspend fun <T> readMessage(id: Int) = throw UnsupportedOperationException("readMessage is not supported for RMI wrappers")

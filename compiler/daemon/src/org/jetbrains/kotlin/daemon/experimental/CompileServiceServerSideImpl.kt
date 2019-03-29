@@ -34,7 +34,6 @@ import org.jetbrains.kotlin.daemon.experimental.CompileServiceTaskScheduler.*
 import org.jetbrains.kotlin.daemon.nowSeconds
 import org.jetbrains.kotlin.daemon.report.experimental.CompileServicesFacadeMessageCollector
 import org.jetbrains.kotlin.daemon.report.experimental.DaemonMessageReporterAsync
-import org.jetbrains.kotlin.daemon.report.experimental.RemoteICReporterAsync
 import org.jetbrains.kotlin.daemon.report.experimental.getICReporterAsync
 import org.jetbrains.kotlin.incremental.components.LookupTracker
 import org.jetbrains.kotlin.incremental.parsing.classesFqNames
@@ -334,44 +333,7 @@ class CompileServiceServerSideImpl(
         createMessageCollector = ::CompileServicesFacadeMessageCollector,
         createReporter = ::DaemonMessageReporterAsync,
         report = CompileServicesFacadeMessageCollector::report,
-        handleJps = { (daemonReporter, messageCollector, k2PlatformArgs, compiler) ->
-            doCompile(sessionId, daemonReporter, tracer = null) { eventManger, profiler ->
-                val services =
-                    createCompileServices(servicesFacade as CompilerCallbackServicesFacadeClientSide, eventManger, profiler)
-                compiler.exec(messageCollector, services, k2PlatformArgs)
-            }
-        },
-        handleNonIncremental = { (daemonReporter, messageCollector, k2PlatformArgs, compiler) ->
-            doCompile(sessionId, daemonReporter, tracer = null) { _, _ ->
-                log.fine("(in doCompile's body) - start")
-                compiler.exec(messageCollector, Services.EMPTY, k2PlatformArgs).also {
-                    log.fine("(in doCompile's body) - end")
-                }
-            }
-        },
-        handleIncremental = { (daemonReporter, messageCollector, k2PlatformArgs, _, gradleIncrementalArgs, gradleIncrementalServicesFacade) ->
-            doCompile(sessionId, daemonReporter, tracer = null) { _, _ ->
-                execIncrementalCompiler(
-                    k2PlatformArgs as K2JVMCompilerArguments,
-                    gradleIncrementalArgs!!,
-                    gradleIncrementalServicesFacade as IncrementalCompilerServicesFacadeAsync,
-                    compilationResults,
-                    messageCollector,
-                    daemonReporter
-                )
-            }
-        },
-        handleJs = { (daemonReporter, messageCollector, k2PlatformArgs, _, gradleIncrementalArgs, gradleIncrementalServicesFacade) ->
-            doCompile(sessionId, daemonReporter, tracer = null) { _, _ ->
-                execJsIncrementalCompiler(
-                    k2PlatformArgs as K2JSCompilerArguments,
-                    gradleIncrementalArgs!!,
-                    gradleIncrementalServicesFacade as IncrementalCompilerServicesFacadeAsync,
-                    compilationResults,
-                    messageCollector
-                )
-            }
-        }
+        createServices = this::createCompileServices
     )
 
     private fun execJsIncrementalCompiler(
@@ -397,8 +359,7 @@ class CompileServiceServerSideImpl(
         k2jvmArgs, incrementalCompilationOptions,
         compilerMessageCollector,
         getICReporterAsync(servicesFacade, compilationResults, incrementalCompilationOptions),
-        reporterFlush = { (it as RemoteICReporterAsync).flush() },
-        daemonMessageReporterReport = daemonMessageReporterAsync::report
+        reporterFlush = { (it as RemoteICReporterAsync).flush() }
     )
 
     override suspend fun leaseReplSession(
@@ -707,7 +668,7 @@ class CompileServiceServerSideImpl(
         }
     }
 
-    private inline fun createCompileServices(
+    private suspend fun createCompileServices(
         facade: CompilerCallbackServicesFacadeClientSide,
         eventManager: EventManager,
         rpcProfiler: Profiler

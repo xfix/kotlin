@@ -85,13 +85,13 @@ interface EventManager {
 }
 
 class EventManagerImpl : EventManager {
-    val onCompilationFinished = arrayListOf<Any>()
+    val onCompilationFinished = arrayListOf<() -> Unit>()
 
-    override inline fun onCompilationFinished(f: suspend () -> Unit) {
+    override fun onCompilationFinished(f: () -> Unit) {
         onCompilationFinished.add(f)
     }
 
-    inline fun fireCompilationFinished() {
+    fun fireCompilationFinished() {
         onCompilationFinished.forEach { it() }
     }
 }
@@ -272,16 +272,6 @@ abstract class CompileServiceImplBase(
     protected abstract fun periodicSeldomCheck()
     protected abstract fun initiateElections()
 
-    protected data class StateForCompilation<MessageCollectorT>(
-        val daemonReporter: DaemonMessageReporter,
-        val messageCollector: MessageCollectorT,
-        val k2PlatformArgs: CommonCompilerArguments,
-        val compiler: CLICompiler<CommonCompilerArguments>,
-        var gradleIncrementalArgs: IncrementalCompilationOptions? = null,
-        var gradleIncrementalServicesFacade: Any? = null
-    )
-
-
     protected inline fun <ServicesFacadeT, JpsServicesFacadeT, CompilationResultsT, MessageCollectorT> compileImpl(
         sessionId: Int,
         compilerArguments: Array<out String>,
@@ -292,10 +282,7 @@ abstract class CompileServiceImplBase(
         createMessageCollector: (ServicesFacadeT, CompilationOptions) -> MessageCollectorT,
         createReporter: (ServicesFacadeT, CompilationOptions) -> DaemonMessageReporter,
         report: MessageCollectorT.(CompilerMessageSeverity, String) -> Unit,
-        handleJps: (StateForCompilation<MessageCollectorT>) -> CompileService.CallResult<Int>,
-        handleNonIncremental: (StateForCompilation<MessageCollectorT>) -> CompileService.CallResult<Int>,
-        handleIncremental: (StateForCompilation<MessageCollectorT>) -> CompileService.CallResult<Int>,
-        handleJs: (StateForCompilation<MessageCollectorT>) -> CompileService.CallResult<Int>
+        createServices: (JpsServicesFacadeT, EventManager, Profiler) -> Services
     ) = kotlin.run {
         val messageCollector = createMessageCollector(servicesFacade, compilationOptions)
         val daemonReporter = createReporter(servicesFacade, compilationOptions)
@@ -313,8 +300,6 @@ abstract class CompileServiceImplBase(
         parseCommandLineArguments(compilerArguments.asList(), k2PlatformArgs)
         val argumentParseError = validateArguments(k2PlatformArgs.errors)
 
-        val state = StateForCompilation(daemonReporter, messageCollector, k2PlatformArgs, compiler)
-
         if (argumentParseError != null) {
             messageCollector.report(CompilerMessageSeverity.ERROR, argumentParseError)
             CompileService.CallResult.Good(ExitCode.COMPILATION_ERROR.code)
@@ -322,26 +307,44 @@ abstract class CompileServiceImplBase(
             CompilerMode.JPS_COMPILER -> {
                 servicesFacade as JpsServicesFacadeT
                 withIC(enabled = servicesFacade.hasIncrementalCaches()) {
-                    log.info("handleJps")
-                    handleJps(state).also { log.info("handleJps - done") }
+                    doCompile(sessionId, daemonReporter, tracer = null) { eventManger, profiler ->
+                        val services = createServices(servicesFacade, eventManger, profiler)
+                        compiler.exec(messageCollector, services, k2PlatformArgs)
+                    }
                 }
             }
             CompilerMode.NON_INCREMENTAL_COMPILER -> {
-                log.info("handleNonIncremental")
-                handleNonIncremental(state).also { log.info("handleNonIncremental - done") }
+                doCompile(sessionId, daemonReporter, tracer = null) { _, _ ->
+                    compiler.exec(messageCollector, Services.EMPTY, k2PlatformArgs)
+                }
             }
             CompilerMode.INCREMENTAL_COMPILER -> {
-                state.gradleIncrementalArgs = compilationOptions as IncrementalCompilationOptions
-                state.gradleIncrementalServicesFacade = servicesFacade as IncrementalCompilerServicesFacade
+                val gradleIncrementalArgs = compilationOptions as IncrementalCompilationOptions
+                val gradleIncrementalServicesFacade = servicesFacade as IncrementalCompilerServicesFacade
 
                 when (targetPlatform) {
                     CompileService.TargetPlatform.JVM -> withIC {
-                        log.info("handleIncremental")
-                        handleIncremental(state).also { log.info("handleIncremental - done") }
+                        doCompile(sessionId, daemonReporter, tracer = null) { _, _ ->
+                            execIncrementalCompiler(
+                                k2PlatformArgs as K2JVMCompilerArguments,
+                                gradleIncrementalArgs!!,
+                                gradleIncrementalServicesFacade as IncrementalCompilerServicesFacade,
+                                compilationResults!!,
+                                messageCollector,
+                                daemonReporter
+                            )
+                        }
                     }
                     CompileService.TargetPlatform.JS -> withJsIC {
-                        log.info("handleJs")
-                        handleJs(state).also { log.info("handleJs - done") }
+                        doCompile(sessionId, daemonReporter, tracer = null) { _, _ ->
+                            execJsIncrementalCompiler(
+                                k2PlatformArgs as K2JSCompilerArguments,
+                                gradleIncrementalArgs!!,
+                                gradleIncrementalServicesFacade as IncrementalCompilerServicesFacade,
+                                compilationResults!!,
+                                messageCollector
+                            )
+                        }
                     }
                     else -> throw IllegalStateException("Incremental compilation is not supported for target platform: $targetPlatform")
 
@@ -518,10 +521,11 @@ abstract class CompileServiceImplBase(
     protected fun execIncrementalCompilerImpl(
         k2jvmArgs: K2JVMCompilerArguments,
         incrementalCompilationOptions: IncrementalCompilationOptions,
+        servicesFacade: IncrementalCompilerServicesFacadeAsync,
+        compilationResults: CompilationResultsAsync?,
         compilerMessageCollector: MessageCollector,
-        reporter: ICReporter,
-        reporterFlush: (ICReporter) -> Unit,
-        daemonMessageReporterReport: (ReportSeverity, String) -> Unit
+        daemonMessageReporter: DaemonMessageReporter,
+        reporterFlush: (ICReporter) -> Unit
     ): ExitCode {
         val moduleFile = k2jvmArgs.buildFile?.let(::File)
         assert(moduleFile?.exists() ?: false) { "Module does not exist ${k2jvmArgs.buildFile}" }
@@ -533,7 +537,7 @@ abstract class CompileServiceImplBase(
             val mc = PrintingMessageCollector(printStream, MessageRenderer.PLAIN_FULL_PATHS, false)
             val parsedModule = ModuleXmlParser.parseModuleScript(k2jvmArgs.buildFile!!, mc)
             if (mc.hasErrors()) {
-                daemonMessageReporterReport(ReportSeverity.ERROR, bytesOut.toString("UTF8"))
+                daemonMessageReporter.report(ReportSeverity.ERROR, bytesOut.toString("UTF8"))
             }
             parsedModule
         }
@@ -585,7 +589,7 @@ abstract class CompileServiceImplBase(
         return try {
             compiler.compile(allKotlinFiles, k2jvmArgs, compilerMessageCollector, changedFiles)
         } finally {
-            reporterFlush(reporter)
+            (reporter as RemoteICReporter).flush()
         }
     }
 
@@ -754,37 +758,18 @@ class CompileServiceImpl(
         compilationOptions: CompilationOptions,
         servicesFacade: CompilerServicesFacadeBase,
         compilationResults: CompilationResults?
-    ) = compileImpl(sessionId, compilerArguments, compilationOptions, servicesFacade, compilationResults, hasIncrementalCaches = JpsCompilerServicesFacade::hasIncrementalCaches, createMessageCollector = ::CompileServicesFacadeMessageCollector, createReporter = ::DaemonMessageReporter, report = CompileServicesFacadeMessageCollector::report, handleJps = { (daemonReporter, messageCollector, k2PlatformArgs, compiler) ->
-            doCompile(sessionId, daemonReporter, tracer = null) { eventManger, profiler ->
-                val services = createCompileServices(servicesFacade as JpsCompilerServicesFacade, eventManger, profiler)
-                compiler.exec(messageCollector, services, k2PlatformArgs)
-            }
-        }, handleNonIncremental = { (daemonReporter, messageCollector, k2PlatformArgs, compiler) ->
-            doCompile(sessionId, daemonReporter, tracer = null) { _, _ ->
-                compiler.exec(messageCollector, Services.EMPTY, k2PlatformArgs)
-            }
-        }, handleIncremental = { (daemonReporter, messageCollector, k2PlatformArgs, _, gradleIncrementalArgs, gradleIncrementalServicesFacade) ->
-            doCompile(sessionId, daemonReporter, tracer = null) { _, _ ->
-                execIncrementalCompiler(
-                    k2PlatformArgs as K2JVMCompilerArguments,
-                    gradleIncrementalArgs!!,
-                    gradleIncrementalServicesFacade as IncrementalCompilerServicesFacade,
-                    compilationResults!!,
-                    messageCollector,
-                    daemonReporter
-                )
-            }
-        }, handleJs = { (daemonReporter, messageCollector, k2PlatformArgs, _, gradleIncrementalArgs, gradleIncrementalServicesFacade) ->
-            doCompile(sessionId, daemonReporter, tracer = null) { _, _ ->
-                execJsIncrementalCompiler(
-                    k2PlatformArgs as K2JSCompilerArguments,
-                    gradleIncrementalArgs!!,
-                    gradleIncrementalServicesFacade as IncrementalCompilerServicesFacade,
-                    compilationResults!!,
-                    messageCollector
-                )
-            }
-        })
+    ) = compileImpl(
+        sessionId,
+        compilerArguments,
+        compilationOptions,
+        servicesFacade,
+        compilationResults,
+        hasIncrementalCaches = JpsCompilerServicesFacade::hasIncrementalCaches,
+        createMessageCollector = ::CompileServicesFacadeMessageCollector,
+        createReporter = ::DaemonMessageReporter,
+        report = CompileServicesFacadeMessageCollector::report,
+        createServices = this::createCompileServices
+    )
 
     private inline fun execJsIncrementalCompiler(
         args: K2JSCompilerArguments,
@@ -809,8 +794,7 @@ class CompileServiceImpl(
         k2jvmArgs, incrementalCompilationOptions,
         compilerMessageCollector,
         getICReporter(servicesFacade, compilationResults, incrementalCompilationOptions),
-        reporterFlush= { (it as RemoteICReporter).flush() },
-        daemonMessageReporterReport = daemonMessageReporter::report
+        reporterFlush= { (it as RemoteICReporter).flush() }
     )
 
     override fun leaseReplSession(
@@ -857,6 +841,37 @@ class CompileServiceImpl(
                 CompileService.CallResult.Good(check(codeLine))
             }
         }
+
+    private fun createCompileServices(
+        facade: CompilerCallbackServicesFacade,
+        eventManager: EventManager,
+        rpcProfiler: Profiler
+    ): Services {
+        val builder = Services.Builder()
+        if (facade.hasIncrementalCaches()) {
+            builder.register(
+                IncrementalCompilationComponents::class.java,
+                RemoteIncrementalCompilationComponentsClient(facade, eventManager, rpcProfiler)
+            )
+        }
+        if (facade.hasLookupTracker()) {
+            builder.register(LookupTracker::class.java, RemoteLookupTrackerClient(facade, eventManager, rpcProfiler))
+        }
+        if (facade.hasCompilationCanceledStatus()) {
+            builder.register(CompilationCanceledStatus::class.java, RemoteCompilationCanceledStatusClient(facade, rpcProfiler))
+        }
+        if (facade.hasExpectActualTracker()) {
+            builder.register(ExpectActualTracker::class.java, RemoteExpectActualTracker(facade, rpcProfiler))
+        }
+        if (facade.hasIncrementalResultsConsumer()) {
+            builder.register(IncrementalResultsConsumer::class.java, RemoteIncrementalResultsConsumer(facade, eventManager, rpcProfiler))
+        }
+        if (facade.hasIncrementalDataProvider()) {
+            builder.register(IncrementalDataProvider::class.java, RemoteIncrementalDataProvider(facade, rpcProfiler))
+        }
+
+        return builder.build()
+    }
 
     override fun remoteReplLineCompile(
         sessionId: Int,
@@ -1219,33 +1234,6 @@ class CompileServiceImpl(
                 }
             }
         }
-
-    private fun createCompileServices(facade: CompilerCallbackServicesFacade, eventManager: EventManager, rpcProfiler: Profiler): Services {
-        val builder = Services.Builder()
-        if (facade.hasIncrementalCaches()) {
-            builder.register(
-                IncrementalCompilationComponents::class.java,
-                RemoteIncrementalCompilationComponentsClient(facade, eventManager, rpcProfiler)
-            )
-        }
-        if (facade.hasLookupTracker()) {
-            builder.register(LookupTracker::class.java, RemoteLookupTrackerClient(facade, eventManager, rpcProfiler))
-        }
-        if (facade.hasCompilationCanceledStatus()) {
-            builder.register(CompilationCanceledStatus::class.java, RemoteCompilationCanceledStatusClient(facade, rpcProfiler))
-        }
-        if (facade.hasExpectActualTracker()) {
-            builder.register(ExpectActualTracker::class.java, RemoteExpectActualTracker(facade, rpcProfiler))
-        }
-        if (facade.hasIncrementalResultsConsumer()) {
-            builder.register(IncrementalResultsConsumer::class.java, RemoteIncrementalResultsConsumer(facade, eventManager, rpcProfiler))
-        }
-        if (facade.hasIncrementalDataProvider()) {
-            builder.register(IncrementalDataProvider::class.java, RemoteIncrementalDataProvider(facade, rpcProfiler))
-        }
-
-        return builder.build()
-    }
 
     override fun clearJarCache() {
         ZipHandler.clearFileAccessorCache()
