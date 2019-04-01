@@ -272,17 +272,17 @@ abstract class CompileServiceImplBase(
     protected abstract fun periodicSeldomCheck()
     protected abstract fun initiateElections()
 
-    protected inline fun <ServicesFacadeT, JpsServicesFacadeT, CompilationResultsT, MessageCollectorT> compileImpl(
+    protected inline fun <ServicesFacadeT, JpsServicesFacadeT, CompilationResultsT, MessageCollector> compileImpl(
         sessionId: Int,
         compilerArguments: Array<out String>,
         compilationOptions: CompilationOptions,
         servicesFacade: ServicesFacadeT,
         compilationResults: CompilationResultsT,
         hasIncrementalCaches: JpsServicesFacadeT.() -> Boolean,
-        createMessageCollector: (ServicesFacadeT, CompilationOptions) -> MessageCollectorT,
+        createMessageCollector: (ServicesFacadeT, CompilationOptions) -> MessageCollector,
         createReporter: (ServicesFacadeT, CompilationOptions) -> DaemonMessageReporter,
-        report: MessageCollectorT.(CompilerMessageSeverity, String) -> Unit,
-        createServices: (JpsServicesFacadeT, EventManager, Profiler) -> Services
+        createServices: (JpsServicesFacadeT, EventManager, Profiler) -> Services,
+        getICReporter: (ServicesFacadeT, CompilationResultsT?, IncrementalCompilationOptions) -> RemoteICReporter
     ) = kotlin.run {
         val messageCollector = createMessageCollector(servicesFacade, compilationOptions)
         val daemonReporter = createReporter(servicesFacade, compilationOptions)
@@ -328,10 +328,12 @@ abstract class CompileServiceImplBase(
                             execIncrementalCompiler(
                                 k2PlatformArgs as K2JVMCompilerArguments,
                                 gradleIncrementalArgs!!,
-                                gradleIncrementalServicesFacade as IncrementalCompilerServicesFacade,
-                                compilationResults!!,
                                 messageCollector,
-                                daemonReporter
+                                getICReporter(
+                                    gradleIncrementalServicesFacade as IncrementalCompilerServicesFacade,
+                                    compilationResults!!,
+                                    gradleIncrementalArgs
+                                )
                             )
                         }
                     }
@@ -340,9 +342,12 @@ abstract class CompileServiceImplBase(
                             execJsIncrementalCompiler(
                                 k2PlatformArgs as K2JSCompilerArguments,
                                 gradleIncrementalArgs!!,
-                                gradleIncrementalServicesFacade as IncrementalCompilerServicesFacade,
-                                compilationResults!!,
-                                messageCollector
+                                messageCollector,
+                                getICReporter(
+                                    gradleIncrementalServicesFacade as IncrementalCompilerServicesFacade,
+                                    compilationResults!!,
+                                    gradleIncrementalArgs
+                                )
                             )
                         }
                     }
@@ -478,12 +483,11 @@ abstract class CompileServiceImplBase(
             } ?: CompileService.CallResult.Error("Not a REPL session $sessionId")
         }
 
-    protected fun execJsIncrementalCompilerImpl(
+    protected fun execJsIncrementalCompiler(
         args: K2JSCompilerArguments,
         incrementalCompilationOptions: IncrementalCompilationOptions,
         compilerMessageCollector: MessageCollector,
-        reporter: ICReporter,
-        reporterFlush: (ICReporter) -> Unit
+        reporter: ICReporter
     ): ExitCode {
         val allKotlinFiles = arrayListOf<File>()
         val freeArgsWithoutKotlinFiles = arrayListOf<String>()
@@ -514,18 +518,15 @@ abstract class CompileServiceImplBase(
         return try {
             compiler.compile(allKotlinFiles, args, compilerMessageCollector, changedFiles)
         } finally {
-            reporterFlush(reporter)
+            (reporter as RemoteICReporter).flush()
         }
     }
 
-    protected fun execIncrementalCompilerImpl(
+    protected fun execIncrementalCompiler(
         k2jvmArgs: K2JVMCompilerArguments,
         incrementalCompilationOptions: IncrementalCompilationOptions,
-        servicesFacade: IncrementalCompilerServicesFacadeAsync,
-        compilationResults: CompilationResultsAsync?,
         compilerMessageCollector: MessageCollector,
-        daemonMessageReporter: DaemonMessageReporter,
-        reporterFlush: (ICReporter) -> Unit
+        reporter: ICReporter
     ): ExitCode {
         val moduleFile = k2jvmArgs.buildFile?.let(::File)
         assert(moduleFile?.exists() ?: false) { "Module does not exist ${k2jvmArgs.buildFile}" }
@@ -767,34 +768,8 @@ class CompileServiceImpl(
         hasIncrementalCaches = JpsCompilerServicesFacade::hasIncrementalCaches,
         createMessageCollector = ::CompileServicesFacadeMessageCollector,
         createReporter = ::DaemonMessageReporter,
-        report = CompileServicesFacadeMessageCollector::report,
-        createServices = this::createCompileServices
-    )
-
-    private inline fun execJsIncrementalCompiler(
-        args: K2JSCompilerArguments,
-        incrementalCompilationOptions: IncrementalCompilationOptions,
-        servicesFacade: IncrementalCompilerServicesFacade,
-        compilationResults: CompilationResults,
-        compilerMessageCollector: MessageCollector
-    ) = execJsIncrementalCompilerImpl(
-        args, incrementalCompilationOptions, compilerMessageCollector,
-        getICReporter(servicesFacade, compilationResults, incrementalCompilationOptions),
-        reporterFlush= { (it as RemoteICReporter).flush() }
-    )
-
-    private inline fun execIncrementalCompiler(
-        k2jvmArgs: K2JVMCompilerArguments,
-        incrementalCompilationOptions: IncrementalCompilationOptions,
-        servicesFacade: IncrementalCompilerServicesFacade,
-        compilationResults: CompilationResults,
-        compilerMessageCollector: MessageCollector,
-        daemonMessageReporter: DaemonMessageReporter
-    ) = execIncrementalCompilerImpl(
-        k2jvmArgs, incrementalCompilationOptions,
-        compilerMessageCollector,
-        getICReporter(servicesFacade, compilationResults, incrementalCompilationOptions),
-        reporterFlush= { (it as RemoteICReporter).flush() }
+        createServices = this::createCompileServices,
+        getICReporter = ::getICReporter
     )
 
     override fun leaseReplSession(

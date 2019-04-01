@@ -332,34 +332,8 @@ class CompileServiceServerSideImpl(
         hasIncrementalCaches = CompilerCallbackServicesFacadeClientSide::hasIncrementalCaches,
         createMessageCollector = ::CompileServicesFacadeMessageCollector,
         createReporter = ::DaemonMessageReporterAsync,
-        report = CompileServicesFacadeMessageCollector::report,
-        createServices = this::createCompileServices
-    )
-
-    private fun execJsIncrementalCompiler(
-        args: K2JSCompilerArguments,
-        incrementalCompilationOptions: IncrementalCompilationOptions,
-        servicesFacade: IncrementalCompilerServicesFacadeAsync,
-        compilationResults: CompilationResultsAsync?,
-        compilerMessageCollector: MessageCollector
-    ) = execJsIncrementalCompilerImpl(
-        args, incrementalCompilationOptions, compilerMessageCollector,
-        getICReporterAsync(servicesFacade, compilationResults, incrementalCompilationOptions),
-        reporterFlush = { (it as RemoteICReporterAsync).flush() }
-    )
-
-    private fun execIncrementalCompiler(
-        k2jvmArgs: K2JVMCompilerArguments,
-        incrementalCompilationOptions: IncrementalCompilationOptions,
-        servicesFacade: IncrementalCompilerServicesFacadeAsync,
-        compilationResults: CompilationResultsAsync?,
-        compilerMessageCollector: MessageCollector,
-        daemonMessageReporterAsync: DaemonMessageReporter
-    ) = execIncrementalCompilerImpl(
-        k2jvmArgs, incrementalCompilationOptions,
-        compilerMessageCollector,
-        getICReporterAsync(servicesFacade, compilationResults, incrementalCompilationOptions),
-        reporterFlush = { (it as RemoteICReporterAsync).flush() }
+        createServices = this::createCompileServices,
+        getICReporter = ::getICReporterAsync
     )
 
     override suspend fun leaseReplSession(

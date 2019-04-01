@@ -134,7 +134,7 @@ internal class CompositeICReporterAsync(private val reporters: Iterable<RemoteIC
     }
 }
 
-internal fun getICReporterAsync(
+fun getICReporterAsync(
         servicesFacade: CompilerServicesFacadeBaseAsync,
         compilationResults: CompilationResultsAsync?,
         compilationOptions: IncrementalCompilationOptions
