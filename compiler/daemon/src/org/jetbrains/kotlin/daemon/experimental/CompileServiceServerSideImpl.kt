@@ -101,7 +101,6 @@ private class CompileServiceTaskScheduler(log: Logger) {
             }
         }
         consumeEach { task ->
-            log.info("task : $task")
             when (task) {
                 is ExclusiveTask -> {
                     if (shutdownTask == null) {
@@ -118,25 +117,20 @@ private class CompileServiceTaskScheduler(log: Logger) {
                         readLocksCount++
                         GlobalScope.async {
                             val res = task.action()
-                            log.info("RES : $res")
                             if (task is OrdinaryTaskWithResult) {
                                 task.result.complete(res)
                             }
                             task.completed.complete(true)
-                            log.info("completed")
                             channel.send(TaskFinished(id))
-                            log.info("SENT!")
                         }
                     } else {
                         waitingTasks.add(task)
                     }
                 }
                 is TaskFinished -> {
-                    log.info("TaskFinished!!!")
                     activeTaskIds.remove(task.taskId)
                     readLocksCount--
                     shutdownIfInactive("TaskFinished")
-                    log.info("TaskFinished!!! -- done")
                 }
                 is ExclusiveTaskFinished -> {
                     shutdownTask = null
@@ -419,20 +413,12 @@ class CompileServiceServerSideImpl(
     }
 
     override fun periodicAndAfterSessionCheck() {
-        log.info("periodicAndAfterSessionCheck")
-
         if (state.delayedShutdownQueued.get()) return
-
-        log.info("state.delayedShutdownQueued.get() == false")
 
         val anyDead = state.sessions.cleanDead() || state.cleanDeadClients()
 
-        log.info("anyDead = $anyDead")
-
         GlobalScope.async {
-            log.info("asyncP{")
             ifAliveUnit(minAliveness = Aliveness.LastSession) {
-                log.info("ifAliveUnit - inside")
                 when {
                     // check if in graceful shutdown state and all sessions are closed
                     state.alive.get() == Aliveness.LastSession.ordinal && state.sessions.isEmpty() -> {

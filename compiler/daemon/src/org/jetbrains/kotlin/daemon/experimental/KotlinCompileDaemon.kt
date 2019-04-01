@@ -85,9 +85,6 @@ object KotlinCompileDaemon {
 
     @JvmStatic
     fun main(args: Array<String>) {
-
-        log.info("main")
-
         ensureServerHostnameIsSetUp()
 
         val jvmArguments = ManagementFactory.getRuntimeMXBean().inputArguments
@@ -99,28 +96,18 @@ object KotlinCompileDaemon {
         setIdeaIoUseFallback()
 
         val compilerId = CompilerId()
-
-        log.info("compilerId: " + compilerId)
-
         val daemonOptions = DaemonOptions()
-
-        log.info("daemonOptions: " + daemonOptions)
 
         runBlocking {
 
             var serverRun: Deferred<Unit>?
 
             try {
-
-                log.info("in try")
-
                 val daemonJVMOptions = configureDaemonJVMOptions(
                     inheritMemoryLimits = true,
                     inheritOtherJvmOptions = true,
                     inheritAdditionalProperties = true
                 )
-
-                log.info("daemonJVMOptions: " + daemonJVMOptions)
 
                 val filteredArgs = args.asIterable()
                     .filterExtractProps(
@@ -128,8 +115,6 @@ object KotlinCompileDaemon {
                         daemonOptions,
                         prefix = COMPILE_DAEMON_CMDLINE_OPTIONS_PREFIX
                     )
-
-                log.info("filteredArgs: " + filteredArgs)
 
                 if (filteredArgs.any()) {
                     val helpLine = "usage: <daemon> <compilerId options> <daemon options>"
@@ -139,7 +124,7 @@ object KotlinCompileDaemon {
                     throw IllegalArgumentException("Unknown arguments: " + filteredArgs.joinToString(" "))
                 }
 
-                log.info("starting_daemon")
+                log.info("starting daemon")
 
                 // TODO: find minimal set of permissions and restore security management
                 // note: may be not needed anymore since (hopefully) server is now loopback-only
@@ -153,7 +138,6 @@ object KotlinCompileDaemon {
                     COMPILE_DAEMON_PORTS_RANGE_START,
                     COMPILE_DAEMON_PORTS_RANGE_END
                 )
-                log.info("findPortForSocket() returned port= $port")
 
 
                 val compilerSelector = object : CompilerSelector {
@@ -166,11 +150,9 @@ object KotlinCompileDaemon {
                         CompileService.TargetPlatform.METADATA -> metadata
                     }
                 }
-                log.info("compilerSelector_ok")
 
                 // timer with a daemon thread, meaning it should not prevent JVM to exit normally
                 val timer = Timer(true)
-                log.info("_STARTING_COMPILE_SERVICE")
                 val compilerService = CompileServiceServerSideImpl(
                     port,
                     compilerSelector,
@@ -192,10 +174,7 @@ object KotlinCompileDaemon {
                         }
                     })
                 compilerService.startDaemonLife()
-                log.info("_COMPILE_SERVICE_STARTED")
-                log.info("_compile_service_RUNNING_SEERVER")
                 serverRun = compilerService.runServer()
-                log.info("_compile_service_SEERVER_IS_RUNNING")
 
 
                 println(COMPILE_DAEMON_IS_READY_MESSAGE)
@@ -216,9 +195,7 @@ object KotlinCompileDaemon {
                 // TODO consider exiting without throwing
                 throw e
             }
-            log.info("awaiting")
             serverRun.await()
-            log.info("downing")
         }
     }
 
