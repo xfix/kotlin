@@ -188,7 +188,7 @@ class Java9ModulesIntegrationTest : AbstractKotlinCompilerIntegrationTest() {
         module("automatic-module1").renameTo(m1)
 
         val m2 = module("automatic-module2", manifest = Manifest().apply {
-            mainAttributes.putValue("Manifest-version", "1.0")
+            mainAttributes.putValue("Manifest-Version", "1.0")
             mainAttributes.putValue("Automatic-Module-Name", "automodule2")
         })
 
