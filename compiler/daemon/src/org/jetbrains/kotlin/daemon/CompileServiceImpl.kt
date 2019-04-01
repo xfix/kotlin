@@ -272,7 +272,7 @@ abstract class CompileServiceImplBase(
     protected abstract fun periodicSeldomCheck()
     protected abstract fun initiateElections()
 
-    protected inline fun <ServicesFacadeT, JpsServicesFacadeT, CompilationResultsT, MessageCollector> compileImpl(
+    protected inline fun <ServicesFacadeT, JpsServicesFacadeT, CompilationResultsT> compileImpl(
         sessionId: Int,
         compilerArguments: Array<out String>,
         compilationOptions: CompilationOptions,
@@ -320,17 +320,17 @@ abstract class CompileServiceImplBase(
             }
             CompilerMode.INCREMENTAL_COMPILER -> {
                 val gradleIncrementalArgs = compilationOptions as IncrementalCompilationOptions
-                val gradleIncrementalServicesFacade = servicesFacade as IncrementalCompilerServicesFacade
+                val gradleIncrementalServicesFacade = servicesFacade
 
                 when (targetPlatform) {
                     CompileService.TargetPlatform.JVM -> withIC {
                         doCompile(sessionId, daemonReporter, tracer = null) { _, _ ->
                             execIncrementalCompiler(
                                 k2PlatformArgs as K2JVMCompilerArguments,
-                                gradleIncrementalArgs!!,
+                                gradleIncrementalArgs,
                                 messageCollector,
                                 getICReporter(
-                                    gradleIncrementalServicesFacade as IncrementalCompilerServicesFacade,
+                                    gradleIncrementalServicesFacade,
                                     compilationResults!!,
                                     gradleIncrementalArgs
                                 )
@@ -341,10 +341,10 @@ abstract class CompileServiceImplBase(
                         doCompile(sessionId, daemonReporter, tracer = null) { _, _ ->
                             execJsIncrementalCompiler(
                                 k2PlatformArgs as K2JSCompilerArguments,
-                                gradleIncrementalArgs!!,
+                                gradleIncrementalArgs,
                                 messageCollector,
                                 getICReporter(
-                                    gradleIncrementalServicesFacade as IncrementalCompilerServicesFacade,
+                                    gradleIncrementalServicesFacade,
                                     compilationResults!!,
                                     gradleIncrementalArgs
                                 )
@@ -537,9 +537,6 @@ abstract class CompileServiceImplBase(
             val printStream = PrintStream(bytesOut)
             val mc = PrintingMessageCollector(printStream, MessageRenderer.PLAIN_FULL_PATHS, false)
             val parsedModule = ModuleXmlParser.parseModuleScript(k2jvmArgs.buildFile!!, mc)
-            if (mc.hasErrors()) {
-                daemonMessageReporter.report(ReportSeverity.ERROR, bytesOut.toString("UTF8"))
-            }
             parsedModule
         }
 
@@ -769,7 +766,7 @@ class CompileServiceImpl(
         createMessageCollector = ::CompileServicesFacadeMessageCollector,
         createReporter = ::DaemonMessageReporter,
         createServices = this::createCompileServices,
-        getICReporter = ::getICReporter
+        getICReporter = { a, b, c -> getICReporter(a, b!!, c)}
     )
 
     override fun leaseReplSession(
