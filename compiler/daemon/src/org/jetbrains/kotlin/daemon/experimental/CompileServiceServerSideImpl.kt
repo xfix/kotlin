@@ -666,7 +666,7 @@ class CompileServiceServerSideImpl(
         return builder.build()
     }
 
-    override suspend fun clearJarCache() {findbugs_license.txt
+    override suspend fun clearJarCache() {
         ZipHandler.clearFileAccessorCache()
         (KotlinCoreEnvironment.applicationEnvironment?.jarFileSystem as? CoreJarFileSystem)?.clearHandlersCache()
     }
