@@ -29,6 +29,7 @@ import org.jetbrains.kotlin.resolve.lazy.ResolveSession
 import org.jetbrains.kotlin.resolve.lazy.data.KtScriptInfo
 import org.jetbrains.kotlin.resolve.lazy.declarations.ClassMemberDeclarationProvider
 import org.jetbrains.kotlin.resolve.lazy.descriptors.LazyClassDescriptor
+import org.jetbrains.kotlin.resolve.lazy.descriptors.LazyClassMemberScope
 import org.jetbrains.kotlin.resolve.scopes.LexicalScope
 import org.jetbrains.kotlin.resolve.scopes.LexicalScopeImpl
 import org.jetbrains.kotlin.resolve.scopes.LexicalScopeKind
@@ -37,6 +38,7 @@ import org.jetbrains.kotlin.script.KotlinScriptDefinition
 import org.jetbrains.kotlin.script.ScriptDependenciesProvider
 import org.jetbrains.kotlin.script.ScriptPriorities
 import org.jetbrains.kotlin.scripting.shared.definitions.scriptDefinitionByFileName
+import org.jetbrains.kotlin.storage.NotNullLazyValue
 import org.jetbrains.kotlin.types.TypeSubstitutor
 import org.jetbrains.kotlin.types.typeUtil.isNothing
 import org.jetbrains.kotlin.types.typeUtil.isUnit
@@ -113,14 +115,19 @@ class LazyScriptDescriptor(
     override fun <R, D> accept(visitor: DeclarationDescriptorVisitor<R, D>, data: D): R =
         visitor.visitScriptDescriptor(this, data)
 
-    override fun createMemberScope(c: LazyClassContext, declarationProvider: ClassMemberDeclarationProvider): LazyScriptClassMemberScope =
-        LazyScriptClassMemberScope(
-            // Must be a ResolveSession for scripts
-            c as ResolveSession,
-            declarationProvider,
-            this,
-            c.trace
-        )
+    override fun createMemberScope(
+        c: LazyClassContext,
+        declarationProvider: ClassMemberDeclarationProvider
+    ): ScopesHolderForClass<LazyClassMemberScope> =
+        ScopesHolderForClass.create(this, c.storageManager) {
+            LazyScriptClassMemberScope(
+                // Must be a ResolveSession for scripts
+                c as ResolveSession,
+                declarationProvider,
+                this,
+                c.trace
+            )
+        }
 
     override fun getUnsubstitutedPrimaryConstructor() = super.getUnsubstitutedPrimaryConstructor()!!
 
