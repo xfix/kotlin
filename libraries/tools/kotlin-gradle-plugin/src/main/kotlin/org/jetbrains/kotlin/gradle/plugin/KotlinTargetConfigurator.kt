@@ -52,31 +52,28 @@ abstract class AbstractKotlinTargetConfigurator<KotlinTargetType : KotlinTarget>
         cleanTask.delete(kotlinCompilation.output.allOutputs)
     }
 
+    protected open fun setupCompilationDependencyFiles(project: Project, compilation: KotlinCompilation<KotlinCommonOptions>) {
+        compilation.compileDependencyFiles = project.configurations.maybeCreate(compilation.compileDependencyConfigurationName)
+        if (compilation is KotlinCompilationToRunnableFiles) {
+            compilation.runtimeDependencyFiles = project.configurations.maybeCreate(compilation.runtimeDependencyConfigurationName)
+        }
+    }
+
     protected open fun configureCompilations(platformTarget: KotlinTargetType) {
         val project = platformTarget.project
         val main = platformTarget.compilations.create(KotlinCompilation.MAIN_COMPILATION_NAME)
 
         platformTarget.compilations.all {
             project.registerOutputsForStaleOutputCleanup(it)
-            it.compileDependencyFiles = project.configurations.maybeCreate(it.compileDependencyConfigurationName)
-            if (it is KotlinCompilationToRunnableFiles) {
-                it.runtimeDependencyFiles = project.configurations.maybeCreate(it.runtimeDependencyConfigurationName)
-            }
+            setupCompilationDependencyFiles(project, it)
         }
 
         if (createTestCompilation) {
             platformTarget.compilations.create(KotlinCompilation.TEST_COMPILATION_NAME).apply {
-                compileDependencyFiles = project.files(
-                    main.output.allOutputs,
-                    project.configurations.maybeCreate(compileDependencyConfigurationName)
-                )
+                compileDependencyFiles += main.output.allOutputs
 
                 if (this is KotlinCompilationToRunnableFiles) {
-                    runtimeDependencyFiles = project.files(
-                        output.allOutputs,
-                        main.output.allOutputs,
-                        project.configurations.maybeCreate(runtimeDependencyConfigurationName)
-                    )
+                    runtimeDependencyFiles += project.files(output.allOutputs, main.output.allOutputs)
                 }
             }
         }
