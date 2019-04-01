@@ -251,7 +251,7 @@ class ConnectionsTest : KotlinIntegrationTestBase() {
         deleteClients()
     }
 
-    fun testConnectionMEchanism_OldClient_OldServer() {
+    fun testConnectionMechanism_OldClient_OldServer() {
         runOldServer()
         expectOldDaemon()
         endTest()

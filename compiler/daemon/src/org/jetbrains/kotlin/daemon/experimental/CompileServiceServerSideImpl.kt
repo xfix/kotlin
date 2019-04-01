@@ -156,6 +156,12 @@ class CompileServiceServerSideImpl(
     val onShutdown: () -> Unit
 ) : CompileServiceServerSide, CompileServiceImplBase(daemonOptions, compilerId, port, timer) {
 
+    private val rmiServer: CompileServiceRMIWrapper
+
+    init {
+        rmiServer = this.toRMIServer(daemonOptions, compilerId)
+    }
+
     private inline fun <R> withValidRepl(
         sessionId: Int,
         body: KotlinJvmReplServiceAsync.() -> CompileService.CallResult<R>
