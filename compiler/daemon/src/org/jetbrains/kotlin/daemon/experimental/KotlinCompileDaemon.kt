@@ -191,6 +191,7 @@ object KotlinCompileDaemon {
                             timer.cancel()
                         }
                     })
+                compilerService.startDaemonLife()
                 log.info("_COMPILE_SERVICE_STARTED")
                 log.info("_compile_service_RUNNING_SEERVER")
                 serverRun = compilerService.runServer()

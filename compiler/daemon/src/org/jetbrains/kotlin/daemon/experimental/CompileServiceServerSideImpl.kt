@@ -48,6 +48,7 @@ import kotlin.concurrent.schedule
 import org.jetbrains.kotlin.daemon.common.experimental.socketInfrastructure.*
 import org.jetbrains.kotlin.daemon.common.experimental.*
 import io.ktor.network.sockets.*
+import org.jetbrains.kotlin.cli.common.KOTLIN_COMPILER_ENVIRONMENT_KEEPALIVE_PROPERTY
 import org.jetbrains.kotlin.daemon.EventManager
 import org.jetbrains.kotlin.daemon.report.DaemonMessageReporter
 
@@ -100,6 +101,7 @@ private class CompileServiceTaskScheduler(log: Logger) {
             }
         }
         consumeEach { task ->
+            log.info("task : $task")
             when (task) {
                 is ExclusiveTask -> {
                     if (shutdownTask == null) {
@@ -116,21 +118,25 @@ private class CompileServiceTaskScheduler(log: Logger) {
                         readLocksCount++
                         GlobalScope.async {
                             val res = task.action()
+                            log.info("RES : $res")
                             if (task is OrdinaryTaskWithResult) {
                                 task.result.complete(res)
                             }
                             task.completed.complete(true)
+                            log.info("completed")
                             channel.send(TaskFinished(id))
+                            log.info("SENT!")
                         }
                     } else {
                         waitingTasks.add(task)
                     }
                 }
                 is TaskFinished -> {
-                    log.fine("TaskFinished!!!")
+                    log.info("TaskFinished!!!")
                     activeTaskIds.remove(task.taskId)
                     readLocksCount--
                     shutdownIfInactive("TaskFinished")
+                    log.info("TaskFinished!!! -- done")
                 }
                 is ExclusiveTaskFinished -> {
                     shutdownTask = null
@@ -156,11 +162,7 @@ class CompileServiceServerSideImpl(
     val onShutdown: () -> Unit
 ) : CompileServiceServerSide, CompileServiceImplBase(daemonOptions, compilerId, port, timer) {
 
-    private val rmiServer: CompileServiceRMIWrapper
-
-    init {
-        rmiServer = this.toRMIServer(daemonOptions, compilerId)
-    }
+    lateinit var rmiServer: CompileServiceRMIWrapper
 
     private inline fun <R> withValidRepl(
         sessionId: Int,
@@ -186,7 +188,7 @@ class CompileServiceServerSideImpl(
         return tryAcquireHandshakeMessage(input, log) && trySendHandshakeMessage(output, log)
     }
 
-    private val scheduler = CompileServiceTaskScheduler(log)
+    private lateinit var scheduler: CompileServiceTaskScheduler
 
     constructor(
         serverSocket: ServerSocketWrapper,
@@ -288,7 +290,7 @@ class CompileServiceServerSideImpl(
         log.info("cleaning after session $sessionId")
         val completed = CompletableDeferred<Boolean>()
         scheduler.scheduleTask(ExclusiveTask(completed, { clearJarCache() }))
-//        completed.await()
+        completed.await()
         postReleaseCompileSession()
     }
 
@@ -403,26 +405,34 @@ class CompileServiceServerSideImpl(
             }
         }
 
-    private fun exceptionLoggingTimerThread(info: String = "no info", body: () -> Unit) {
-        try {
-            println("exceptionLoggingTimerThread body($info) : starting...")
-            body()
-            println("exceptionLoggingTimerThread body($info) : finishec(OK)")
-        } catch (e: Throwable) {
-            System.err.println("[$info] Exception in timer thread: " + e.message)
-            e.printStackTrace(System.err)
-            log.log(Level.SEVERE, "[$info] Exception in timer thread", e)
-        }
+    init {
+
+        scheduler = CompileServiceTaskScheduler(log)
+
+        // assuming logically synchronized
+        System.setProperty(KOTLIN_COMPILER_ENVIRONMENT_KEEPALIVE_PROPERTY, "true")
+
+        // TODO UNCOMMENT THIS : this.toRMIServer(daemonOptions, compilerId) // also create RMI server in order to support old clients
+        rmiServer = this.toRMIServer(daemonOptions, compilerId)
+
+        KeepAliveServer.runServer()
     }
 
     override fun periodicAndAfterSessionCheck() {
+        log.info("periodicAndAfterSessionCheck")
 
         if (state.delayedShutdownQueued.get()) return
 
+        log.info("state.delayedShutdownQueued.get() == false")
+
         val anyDead = state.sessions.cleanDead() || state.cleanDeadClients()
 
+        log.info("anyDead = $anyDead")
+
         GlobalScope.async {
+            log.info("asyncP{")
             ifAliveUnit(minAliveness = Aliveness.LastSession) {
+                log.info("ifAliveUnit - inside")
                 when {
                     // check if in graceful shutdown state and all sessions are closed
                     state.alive.get() == Aliveness.LastSession.ordinal && state.sessions.isEmpty() -> {

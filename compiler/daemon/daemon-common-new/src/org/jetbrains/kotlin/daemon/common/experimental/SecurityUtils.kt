@@ -59,7 +59,7 @@ suspend fun getSignatureAndVerify(input: ByteReadChannelWrapper, expectedToken: 
     dsa.initVerify(publicKey)
     dsa.update(expectedToken, 0, SECURITY_TOKEN_SIZE)
     val verified = dsa.verify(signature)
-    log.info("verified : $verified")
+    log.fine("verified : $verified")
     return verified
 }
 

@@ -272,6 +272,16 @@ abstract class CompileServiceImplBase(
     protected abstract fun periodicSeldomCheck()
     protected abstract fun initiateElections()
 
+    protected inline fun exceptionLoggingTimerThread(body: () -> Unit) {
+        try {
+            body()
+        } catch (e: Throwable) {
+            System.err.println("Exception in timer thread: " + e.message)
+            e.printStackTrace(System.err)
+            log.log(Level.SEVERE, "Exception in timer thread", e)
+        }
+    }
+
     protected inline fun <ServicesFacadeT, JpsServicesFacadeT, CompilationResultsT> compileImpl(
         sessionId: Int,
         compilerArguments: Array<out String>,
@@ -436,6 +446,36 @@ abstract class CompileServiceImplBase(
             throw e
         }
     }
+
+
+    // -----------------------------------------------------------------------
+    // internal implementation stuff
+
+    // TODO: consider matching compilerId coming from outside with actual one
+    //    private val selfCompilerId by lazy {
+    //        CompilerId(
+    //                compilerClasspath = System.getProperty("java.class.path")
+    //                                            ?.split(File.pathSeparator)
+    //                                            ?.map { File(it) }
+    //                                            ?.filter { it.exists() }
+    //                                            ?.map { it.absolutePath }
+    //                                    ?: listOf(),
+    //                compilerVersion = loadKotlinVersionFromResource()
+    //        )
+    //    }
+
+    fun startDaemonLife() {
+        timer.schedule(10) {
+            exceptionLoggingTimerThread { initiateElections() }
+        }
+        timer.schedule(delay = DAEMON_PERIODIC_CHECK_INTERVAL_MS, period = DAEMON_PERIODIC_CHECK_INTERVAL_MS) {
+            exceptionLoggingTimerThread { periodicAndAfterSessionCheck() }
+        }
+        timer.schedule(delay = DAEMON_PERIODIC_SELDOM_CHECK_INTERVAL_MS + 100, period = DAEMON_PERIODIC_SELDOM_CHECK_INTERVAL_MS) {
+            exceptionLoggingTimerThread { periodicSeldomCheck() }
+        }
+    }
+
 
     protected inline fun <R> ifAliveChecksImpl(
         minAliveness: Aliveness = Aliveness.LastSession,
@@ -913,60 +953,6 @@ class CompileServiceImpl(
             }
         }
 
-    // -----------------------------------------------------------------------
-    // internal implementation stuff
-
-    // TODO: consider matching compilerId coming from outside with actual one
-    //    private val selfCompilerId by lazy {
-    //        CompilerId(
-    //                compilerClasspath = System.getProperty("java.class.path")
-    //                                            ?.split(File.pathSeparator)
-    //                                            ?.map { File(it) }
-    //                                            ?.filter { it.exists() }
-    //                                            ?.map { it.absolutePath }
-    //                                    ?: listOf(),
-    //                compilerVersion = loadKotlinVersionFromResource()
-    //        )
-    //    }
-
-    init {
-        // assuming logically synchronized
-        try {
-            // cleanup for the case of incorrect restart and many other situations
-            UnicastRemoteObject.unexportObject(this, false)
-        } catch (e: NoSuchObjectException) {
-            // ignoring if object already exported
-        }
-
-        val stub = UnicastRemoteObject.exportObject(
-            this,
-            port,
-            LoopbackNetworkInterface.clientLoopbackSocketFactory,
-            LoopbackNetworkInterface.serverLoopbackSocketFactory
-        ) as CompileService
-        registry.rebind(COMPILER_SERVICE_RMI_NAME, stub)
-
-        timer.schedule(10) {
-            exceptionLoggingTimerThread { initiateElections() }
-        }
-        timer.schedule(delay = DAEMON_PERIODIC_CHECK_INTERVAL_MS, period = DAEMON_PERIODIC_CHECK_INTERVAL_MS) {
-            exceptionLoggingTimerThread { periodicAndAfterSessionCheck() }
-        }
-        timer.schedule(delay = DAEMON_PERIODIC_SELDOM_CHECK_INTERVAL_MS + 100, period = DAEMON_PERIODIC_SELDOM_CHECK_INTERVAL_MS) {
-            exceptionLoggingTimerThread { periodicSeldomCheck() }
-        }
-    }
-
-    private inline fun exceptionLoggingTimerThread(body: () -> Unit) {
-        try {
-            body()
-        } catch (e: Throwable) {
-            System.err.println("Exception in timer thread: " + e.message)
-            e.printStackTrace(System.err)
-            log.log(Level.SEVERE, "Exception in timer thread", e)
-        }
-    }
-
     override fun periodicAndAfterSessionCheck() {
 
         if (state.delayedShutdownQueued.get()) return
@@ -1206,6 +1192,24 @@ class CompileServiceImpl(
                 }
             }
         }
+
+    init {
+        // assuming logicaly synchronized
+        try {
+            // cleanup for the case of incorrect restart and many other situations
+            UnicastRemoteObject.unexportObject(this, false)
+        } catch (e: NoSuchObjectException) {
+            // ignoring if object already exported
+        }
+
+        val stub = UnicastRemoteObject.exportObject(
+            this,
+            port,
+            LoopbackNetworkInterface.clientLoopbackSocketFactory,
+            LoopbackNetworkInterface.serverLoopbackSocketFactory
+        ) as CompileService
+        registry.rebind(COMPILER_SERVICE_RMI_NAME, stub)
+    }
 
     override fun clearJarCache() {
         ZipHandler.clearFileAccessorCache()

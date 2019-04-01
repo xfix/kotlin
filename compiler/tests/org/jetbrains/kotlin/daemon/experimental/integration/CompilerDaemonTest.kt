@@ -1306,7 +1306,7 @@ class CompilerDaemonTest : KotlinIntegrationTestBase() {
             port = serverPort,
             timer = timer,
             onShutdown = onShutdown
-        )
+        ).startDaemonLife()
         println("old daemon init: port = $serverPort")
     }
 }
