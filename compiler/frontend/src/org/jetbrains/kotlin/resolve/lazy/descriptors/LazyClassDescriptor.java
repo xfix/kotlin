@@ -18,9 +18,7 @@ import org.jetbrains.kotlin.descriptors.*;
 import org.jetbrains.kotlin.descriptors.annotations.Annotations;
 import org.jetbrains.kotlin.descriptors.impl.ClassDescriptorBase;
 import org.jetbrains.kotlin.descriptors.impl.FunctionDescriptorImpl;
-import org.jetbrains.kotlin.diagnostics.DiagnosticFactory;
 import org.jetbrains.kotlin.diagnostics.DiagnosticFactory0;
-import org.jetbrains.kotlin.diagnostics.Errors;
 import org.jetbrains.kotlin.incremental.components.NoLookupLocation;
 import org.jetbrains.kotlin.lexer.KtTokens;
 import org.jetbrains.kotlin.name.Name;
@@ -317,7 +315,18 @@ public class LazyClassDescriptor extends ClassDescriptorBase implements ClassDes
         return ScopesHolderForClass.Companion.create(
                 this,
                 c.getStorageManager(),
-                moduleDescriptor -> new LazyClassMemberScope(c, declarationProvider, this, c.getTrace(), moduleDescriptor)
+                moduleDescriptor -> {
+                    LazyClassMemberScope scopeForDeclaredMembers =
+                            moduleDescriptor == c.getModuleDescriptor()
+                                ? null
+                                : scopesHolderForClass.getScope(c.getModuleDescriptor());
+
+                    return new LazyClassMemberScope(
+                            c, declarationProvider, this, c.getTrace(), moduleDescriptor,
+                            scopeForDeclaredMembers
+                    );
+                }
+
         );
     }
 
