@@ -8,7 +8,6 @@
     </project-components>
 
     <extensions defaultExtensionNs="com.intellij">
-        <directoryProjectGenerator implementation="org.jetbrains.konan.KonanGradleProjectGenerator"/>
         <projectTaskRunner implementation="org.jetbrains.konan.gradle.execution.GradleKonanProjectTaskRunner"/>
 
         <configurationType implementation="org.jetbrains.konan.gradle.execution.GradleKonanAppRunConfigurationType"/>
@@ -17,6 +16,7 @@
         <runLineMarkerContributor language="ObjectiveC"
                                   implementationClass="org.jetbrains.konan.gradle.execution.GradleKonanTargetRunLineMarkerProvider"/>
         <stepsBeforeRunProvider implementation="org.jetbrains.konan.gradle.execution.GradleKonanBuildBeforeRunTaskProvider"/>
+        <externalProjectDataService implementation="org.jetbrains.konan.gradle.KonanProjectDataService"/>
     </extensions>
 
     <extensions defaultExtensionNs="org.jetbrains.plugins.gradle">
