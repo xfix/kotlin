@@ -41,22 +41,18 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
 
-open class KotlinJvmReplService(
-        disposable: Disposable,
-        val portForServers: Int,
-        templateClasspath: List<File>,
-        templateClassName: String,
-        protected val messageCollector: MessageCollector,
-        @Deprecated("drop it")
-        protected val operationsTracer: RemoteOperationsTracer?
-) : ReplCompileAction, ReplCheckAction, CreateReplStageStateAction {
-
+abstract class KotlinJvmReplServiceBase(
+    disposable: Disposable,
+    templateClasspath: List<File>,
+    templateClassName: String,
+    protected val messageCollector: MessageCollector,
+    ) : ReplCompileAction, ReplCheckAction, CreateReplStageStateAction {
     protected val configuration = CompilerConfiguration().apply {
         addJvmClasspathRoots(PathUtil.kotlinPathsForCompiler.let { listOf(it.stdlibPath, it.reflectPath, it.scriptRuntimePath) })
         addJvmClasspathRoots(templateClasspath)
         put(CommonConfigurationKeys.MODULE_NAME, "kotlin-script")
         languageVersionSettings = LanguageVersionSettingsImpl(
-                LanguageVersion.LATEST_STABLE, ApiVersion.LATEST_STABLE, mapOf(AnalysisFlags.skipMetadataVersionCheck to true)
+            LanguageVersion.LATEST_STABLE, ApiVersion.LATEST_STABLE, mapOf(AnalysisFlags.skipMetadataVersionCheck to true)
         )
         configureScripting()
     }
@@ -67,55 +63,76 @@ open class KotlinJvmReplService(
         try {
             val cls = classloader.loadClass(templateClassName)
             val def = KotlinScriptDefinitionFromAnnotatedTemplate(cls.kotlin, emptyMap())
-            messageCollector.report(INFO, "New script definition $templateClassName: files pattern = \"${def.scriptFilePattern}\", " +
-                                          "resolver = ${def.dependencyResolver.javaClass.name}")
+            messageCollector.report(
+                INFO, "New script definition $templateClassName: files pattern = \"${def.scriptFilePattern}\", " +
+                        "resolver = ${def.dependencyResolver.javaClass.name}"
+            )
             return def
-        }
-        catch (ex: ClassNotFoundException) {
+        } catch (ex: ClassNotFoundException) {
             messageCollector.report(ERROR, "Cannot find script definition template class $templateClassName")
-        }
-        catch (ex: Exception) {
+        } catch (ex: Exception) {
             messageCollector.report(ERROR, "Error processing script definition template $templateClassName: ${ex.message}")
         }
         return null
     }
 
-    private val scriptDef = makeScriptDefinition(templateClasspath, templateClassName)
+    protected val scriptDef = makeScriptDefinition(templateClasspath, templateClassName)
 
-    private val replCompiler: ReplCompiler? by lazy {
+    protected val replCompiler: ReplCompiler? by lazy {
         if (scriptDef == null) null
         else GenericReplCompiler(disposable, scriptDef, configuration, messageCollector)
     }
 
     protected val statesLock = ReentrantReadWriteLock()
-    // TODO: consider using values here for session cleanup
-    protected val states = WeakHashMap<RemoteReplStateFacadeServer, Boolean>() // used as (missing) WeakHashSet
     protected val stateIdCounter = AtomicInteger()
-    @Deprecated("remove after removal state-less check/compile/eval methods")
-    protected val defaultStateFacade: RemoteReplStateFacadeServer by lazy { createRemoteState() }
 
     override fun createState(lock: ReentrantReadWriteLock): IReplStageState<*> =
-            replCompiler?.createState(lock) ?: throw IllegalStateException("repl compiler is not initialized properly")
+        replCompiler?.createState(lock) ?: throw IllegalStateException("repl compiler is not initialized properly")
+
+    protected open fun before(s: String) {}
+    protected open fun after(s: String) {}
 
     override fun check(state: IReplStageState<*>, codeLine: ReplCodeLine): ReplCheckResult {
-        operationsTracer?.before("check")
+        before("check")
         try {
             return replCompiler?.check(state, codeLine) ?: ReplCheckResult.Error("Initialization error")
-        }
-        finally {
-            operationsTracer?.after("check")
+        } finally {
+            after("check")
         }
     }
 
     override fun compile(state: IReplStageState<*>, codeLine: ReplCodeLine): ReplCompileResult {
-        operationsTracer?.before("compile")
+        before("compile")
         try {
             return replCompiler?.compile(state, codeLine) ?: ReplCompileResult.Error("Initialization error")
-        }
-        finally {
-            operationsTracer?.after("compile")
+        } finally {
+            after("compile")
         }
     }
+
+}
+
+open class KotlinJvmReplService(
+    disposable: Disposable,
+    val portForServers: Int,
+    templateClasspath: List<File>,
+    templateClassName: String,
+    messageCollector: MessageCollector,
+    @Deprecated("drop it")
+    protected val operationsTracer: RemoteOperationsTracer?
+) : KotlinJvmReplServiceBase(disposable, templateClasspath, templateClassName, messageCollector) {
+
+    override fun before(s: String) {
+        operationsTracer?.before(s)
+    }
+
+    override fun after(s: String) {
+        operationsTracer?.after(s)
+    }
+
+    protected val states = WeakHashMap<RemoteReplStateFacadeServer, Boolean>() // used as (missing) WeakHashSet
+    @Deprecated("remove after removal state-less check/compile/eval methods")
+    protected val defaultStateFacade: RemoteReplStateFacadeServer by lazy { createRemoteState() }
 
     @Deprecated("Use check(state, line) instead")
     fun check(codeLine: ReplCodeLine): ReplCheckResult = check(defaultStateFacade.state, codeLine)
@@ -124,17 +141,17 @@ open class KotlinJvmReplService(
     fun compile(codeLine: ReplCodeLine, verifyHistory: List<ReplCodeLine>?): ReplCompileResult = compile(defaultStateFacade.state, codeLine)
 
     fun createRemoteState(port: Int = portForServers): RemoteReplStateFacadeServer = statesLock.write {
-        val id = getValidId(stateIdCounter) { id -> states.none { it.key.getId() == id} }
+        val id = getValidId(stateIdCounter) { id -> states.none { it.key.getId() == id } }
         val stateFacade = RemoteReplStateFacadeServer(id, createState().asState(GenericReplCompilerState::class.java), port)
         states.put(stateFacade, true)
         stateFacade
     }
 
-    fun<R> withValidReplState(stateId: Int, body: (IReplStageState<*>) -> R): CompileService.CallResult<R> = statesLock.read {
+    fun <R> withValidReplState(stateId: Int, body: (IReplStageState<*>) -> R): CompileService.CallResult<R> = statesLock.read {
         states.keys.firstOrNull { it.getId() == stateId }?.let {
             CompileService.CallResult.Good(body(it.state))
         }
-        ?: CompileService.CallResult.Error("No REPL state with id $stateId found")
+            ?: CompileService.CallResult.Error("No REPL state with id $stateId found")
     }
 }
 
@@ -161,7 +178,7 @@ internal class KeepFirstErrorMessageCollector(compilerMessagesStream: PrintStrea
 
 internal val internalRng = Random()
 
-inline internal fun getValidId(counter: AtomicInteger, check: (Int) -> Boolean): Int {
+inline fun getValidId(counter: AtomicInteger, check: (Int) -> Boolean): Int {
     // fighting hypothetical integer wrapping
     var newId = counter.incrementAndGet()
     var attemptsLeft = 100
