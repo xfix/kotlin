@@ -18,9 +18,12 @@ import org.jetbrains.kotlin.ir.declarations.impl.IrValueParameterImpl
 import org.jetbrains.kotlin.ir.expressions.*
 import org.jetbrains.kotlin.ir.expressions.impl.*
 import org.jetbrains.kotlin.ir.symbols.*
-import org.jetbrains.kotlin.ir.types.*
+import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.impl.IrSimpleTypeImpl
 import org.jetbrains.kotlin.ir.types.impl.makeTypeProjection
+import org.jetbrains.kotlin.ir.types.makeNotNull
+import org.jetbrains.kotlin.ir.types.toKotlinType
+import org.jetbrains.kotlin.ir.types.typeWith
 import org.jetbrains.kotlin.ir.util.*
 import org.jetbrains.kotlin.js.resolve.diagnostics.findPsi
 import org.jetbrains.kotlin.name.ClassId
@@ -35,6 +38,7 @@ import org.jetbrains.kotlin.types.Variance
 import org.jetbrains.kotlin.types.typeUtil.isTypeParameter
 import org.jetbrains.kotlin.types.typeUtil.makeNotNullable
 import org.jetbrains.kotlinx.serialization.compiler.backend.common.findTypeSerializerOrContext
+import org.jetbrains.kotlinx.serialization.compiler.backend.common.isSerializationCtor
 import org.jetbrains.kotlinx.serialization.compiler.backend.jvm.contextSerializerId
 import org.jetbrains.kotlinx.serialization.compiler.backend.jvm.enumSerializerId
 import org.jetbrains.kotlinx.serialization.compiler.backend.jvm.polymorphicSerializerId
@@ -77,6 +81,7 @@ interface IrBuilderExtension {
     fun IrClass.contributeConstructor(
         descriptor: ClassConstructorDescriptor,
         fromStubs: Boolean = false,
+        overwriteValueParameters: Boolean = false,
         bodyGen: IrBlockBodyBuilder.(IrConstructor) -> Unit
     ) {
         val c = if (!fromStubs) compilerContext.localSymbolTable.declareConstructor(
@@ -87,7 +92,7 @@ interface IrBuilderExtension {
         ) else compilerContext.externalSymbols.referenceConstructor(descriptor).owner
         c.parent = this
         c.returnType = descriptor.returnType.toIrType()
-        if (!fromStubs) c.createParameterDeclarations(receiver = null)
+        if (!fromStubs || overwriteValueParameters) c.createParameterDeclarations(receiver = null, overwriteValueParameters = overwriteValueParameters)
         if (c.typeParameters.isEmpty()) {
             c.copyTypeParamsFromDescriptor()
         }
@@ -346,7 +351,7 @@ interface IrBuilderExtension {
         }
     }
 
-    fun IrFunction.createParameterDeclarations(receiver: IrValueParameter?) {
+    fun IrFunction.createParameterDeclarations(receiver: IrValueParameter?, overwriteValueParameters: Boolean = false) {
         fun ParameterDescriptor.irValueParameter() = IrValueParameterImpl(
             this@createParameterDeclarations.startOffset, this@createParameterDeclarations.endOffset,
             SERIALIZABLE_PLUGIN_ORIGIN,
@@ -360,8 +365,11 @@ interface IrBuilderExtension {
         dispatchReceiverParameter = descriptor.dispatchReceiverParameter?.irValueParameter()
         extensionReceiverParameter = descriptor.extensionReceiverParameter?.irValueParameter()
 
-        assert(valueParameters.isEmpty())
-        descriptor.valueParameters.mapTo(valueParameters) { it.irValueParameter() }
+        if (!overwriteValueParameters)
+            assert(valueParameters.isEmpty())
+        else
+            valueParameters.clear()
+        valueParameters.addAll(descriptor.valueParameters.map { it.irValueParameter() })
 
         assert(typeParameters.isEmpty())
         copyTypeParamsFromDescriptor()
@@ -537,5 +545,5 @@ interface IrBuilderExtension {
     }
 
     fun IrClass.serializableSyntheticConstructor(): IrConstructorSymbol =
-        this.constructors.single { it.origin == SERIALIZABLE_PLUGIN_ORIGIN }.symbol
+        this.constructors.single { it.descriptor.isSerializationCtor() }.symbol
 }

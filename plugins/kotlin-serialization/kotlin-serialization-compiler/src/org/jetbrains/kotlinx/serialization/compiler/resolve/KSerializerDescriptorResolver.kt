@@ -18,8 +18,10 @@ package org.jetbrains.kotlinx.serialization.compiler.resolve
 
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
 import org.jetbrains.kotlin.descriptors.*
+import org.jetbrains.kotlin.descriptors.annotations.AnnotationDescriptor
 import org.jetbrains.kotlin.descriptors.annotations.AnnotationDescriptorImpl
 import org.jetbrains.kotlin.descriptors.annotations.Annotations
+import org.jetbrains.kotlin.descriptors.annotations.createDeprecatedAnnotation
 import org.jetbrains.kotlin.descriptors.impl.*
 import org.jetbrains.kotlin.incremental.components.NoLookupLocation
 import org.jetbrains.kotlin.name.ClassId
@@ -92,6 +94,7 @@ object KSerializerDescriptorResolver {
             scope,
             Modality.FINAL,
             Visibilities.PUBLIC,
+            Annotations.create(listOf(createDeprecatedHiddenAnnotation(interfaceDesc.module))),
             primaryCtorVisibility,
             ClassKind.CLASS,
             false
@@ -114,7 +117,9 @@ object KSerializerDescriptorResolver {
             thisDeclaration,
             thisDescriptor, SERIALIZER_CLASS_NAME, thisDescriptor.source,
             scope,
-            Modality.FINAL, Visibilities.PUBLIC, Visibilities.PRIVATE,
+            Modality.FINAL, Visibilities.PUBLIC,
+            Annotations.create(listOf(createDeprecatedHiddenAnnotation(thisDescriptor.module))),
+            Visibilities.PRIVATE,
             serializerKind, false
         )
         val typeParameters: List<TypeParameterDescriptor> =
@@ -268,6 +273,10 @@ object KSerializerDescriptorResolver {
         return functionDescriptor
     }
 
+    private fun createDeprecatedHiddenAnnotation(module: ModuleDescriptor): AnnotationDescriptor {
+        return module.builtIns.createDeprecatedAnnotation("Synthesized declaration", level = "HIDDEN")
+    }
+
     fun createLoadConstructorDescriptor(
         classDescriptor: ClassDescriptor,
         bindingContext: BindingContext
@@ -276,9 +285,9 @@ object KSerializerDescriptorResolver {
 
         val functionDescriptor = ClassConstructorDescriptorImpl.createSynthesized(
             classDescriptor,
-            Annotations.EMPTY,
+            Annotations.create(listOf(createDeprecatedHiddenAnnotation(classDescriptor.module))),
             false,
-            classDescriptor.source
+            SourceElement.NO_SOURCE
         )
 
         val markerDesc = classDescriptor.getKSerializerConstructorMarker()
@@ -314,7 +323,7 @@ object KSerializerDescriptorResolver {
 
         functionDescriptor.initialize(
             consParams,
-            Visibilities.PUBLIC
+            Visibilities.INTERNAL
         )
 
         functionDescriptor.returnType = classDescriptor.defaultType
@@ -344,7 +353,7 @@ object KSerializerDescriptorResolver {
     ): ClassConstructorDescriptor {
         val constrDesc = ClassConstructorDescriptorImpl.createSynthesized(
             classDescriptor,
-            Annotations.EMPTY,
+            Annotations.create(listOf(createDeprecatedHiddenAnnotation(classDescriptor.module))),
             false,
             classDescriptor.source
         )
