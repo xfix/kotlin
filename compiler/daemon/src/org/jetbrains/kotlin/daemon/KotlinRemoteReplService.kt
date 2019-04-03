@@ -45,8 +45,8 @@ abstract class KotlinJvmReplServiceBase(
     disposable: Disposable,
     templateClasspath: List<File>,
     templateClassName: String,
-    protected val messageCollector: MessageCollector,
-    ) : ReplCompileAction, ReplCheckAction, CreateReplStageStateAction {
+    protected val messageCollector: MessageCollector
+) : ReplCompileAction, ReplCheckAction, CreateReplStageStateAction {
     protected val configuration = CompilerConfiguration().apply {
         addJvmClasspathRoots(PathUtil.kotlinPathsForCompiler.let { listOf(it.stdlibPath, it.reflectPath, it.scriptRuntimePath) })
         addJvmClasspathRoots(templateClasspath)
@@ -176,7 +176,7 @@ internal class KeepFirstErrorMessageCollector(compilerMessagesStream: PrintStrea
     }
 }
 
-internal val internalRng = Random()
+val internalRng = Random()
 
 inline fun getValidId(counter: AtomicInteger, check: (Int) -> Boolean): Int {
     // fighting hypothetical integer wrapping
