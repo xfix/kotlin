@@ -11,6 +11,7 @@ import com.intellij.openapi.module.StdModuleTypes
 import com.intellij.openapi.roots.CompilerModuleExtension
 import com.intellij.openapi.roots.ModuleRootModificationUtil
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.util.text.trimMiddle
 import junit.framework.TestCase
 import org.jetbrains.kotlin.codegen.forTestCompile.ForTestCompileRuntime
 import org.jetbrains.kotlin.idea.framework.CommonLibraryKind
@@ -22,6 +23,9 @@ import org.jetbrains.kotlin.idea.test.PluginTestCaseBase
 import org.jetbrains.kotlin.resolve.*
 import org.jetbrains.kotlin.test.TestJdkKind
 import java.io.File
+import kotlin.reflect.KMutableProperty1
+import kotlin.reflect.full.findAnnotation
+import kotlin.reflect.full.memberProperties
 
 // allows to configure a test mpp project
 // testRoot is supposed to contain several directories which contain module sources roots
@@ -30,6 +34,90 @@ fun AbstractMultiModuleTest.setupMppProjectFromDirStructure(testRoot: File) {
     assert(testRoot.isDirectory) { testRoot.absolutePath + " must be a directory" }
     val dirs = testRoot.listFiles().filter { it.isDirectory }
     val rootInfos = dirs.map { parseDirName(it) }
+    doSetupProject(rootInfos)
+}
+
+fun AbstractMultiModuleTest.setupMppProjectFromTextFile(testRoot: File) {
+    assert(testRoot.isDirectory) { testRoot.absolutePath + " must be a directory" }
+    val dependeciesTxt = File(testRoot, "dependencies.txt")
+    val rootInfos = parseRootInfos(dependeciesTxt)
+    doSetupProject(rootInfos)
+}
+
+/**
+ * Each line defines a module in a format:
+ *
+ * MODULE_NAME MODULE_ATTRIBUTES -> DEPENDENCIES
+ */
+private fun parseRootInfos(dependeciesTxt: File): List<RootInfo> {
+    return dependeciesTxt.readLines().map { line ->
+        val lhsAndRhs = line.split("->")
+        require(lhsAndRhs.size <= 2) { "Illegal format of dependencies.txt: More than one '->' is found in line $line" }
+
+        val lhs = lhsAndRhs[0]
+        val rhs = lhsAndRhs.getOrNull(1)
+
+        val moduleName = lhs.substringBefore(" ")
+        val attributes = parseAttributes(lhs.removePrefix(moduleName).trim())
+        val dependencies = parseDependencies(rhs.trim())
+
+        RootInfo(ModuleId(moduleName, TODO(), TODO(), dependencies))
+    }
+}
+
+class ModuleAttributes {
+    private val map: MutableMap<Attribute<*>, Any> = hashMapOf()
+
+    fun <T> get(attribute: Attribute<T>): T = map[attribute] as T
+    fun <T> put(attribute: Attribute<T>, value: T) {
+        map[attribute] = value as Any
+    }
+
+    data class Attribute<T>(val id: String)
+
+    companion object {
+        val PLATFORM = Attribute<TargetPlatform>("platform")
+
+        val allAttributes: List<Attribute<*>> = listOf(PLATFORM)
+
+        val attributesByName = allAttributes.associateBy { it.id }
+    }
+}
+
+/**
+ * Format:
+ *
+ * ATTRIBUTE1 ; ATTRIBUTE2 ; ...
+ *
+ * Format of each attribute:
+ *
+ * ATTRIBUTE = ATTRIBUTE_NAME '=' ATTRIBUTE_VALUE
+ * ATTRIBUTE_VALUE = '[' value1 ',' value2 ',' ... ']'
+ */
+private fun parseAttributes(attributesString: String): ModuleAttributes {
+    val moduleAttributes = ModuleAttributes()
+
+    attributesString.split(";").map { attributeString ->
+        val nameAndValue = attributeString.split("=")
+        require(nameAndValue.size == 1) { "Illegal format of dependencies.txt: attribute $attributeString contains not exactly one '='" }
+
+        val (id, valueString) = nameAndValue
+
+        val value: Any = if (valueString.startsWith("[") && valueString.endsWith("]")) {
+            valueString.removePrefix("[").removeSuffix("]").split(",")
+        } else {
+            valueString
+        }
+
+        val attribute: ModuleAttributes.Attribute<*> = ModuleAttributes.attributesByName[id]!!
+
+        moduleAttributes.put(attribute as ModuleAttributes.Attribute<Any>, value)
+    }
+
+    return moduleAttributes
+}
+
+private fun AbstractMultiModuleTest.doSetupProject(rootInfos: List<RootInfo>) {
     val infosByModuleId = rootInfos.groupBy { it.moduleId }
     val modulesById = infosByModuleId.mapValues { (moduleId, infos) ->
         createModuleWithRoots(moduleId, infos)
