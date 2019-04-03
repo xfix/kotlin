@@ -1754,7 +1754,7 @@
                      groupPath="Kotlin"
                      groupName="Style issues"
                      enabledByDefault="true"
-                     level="INFO"
+                     level="WEAK WARNING"
                      language="kotlin"
     />
 
@@ -1763,7 +1763,7 @@
                      groupPath="Kotlin"
                      groupName="Style issues"
                      enabledByDefault="true"
-                     level="INFO"
+                     level="WEAK WARNING"
                      language="kotlin"
     />
 
@@ -1790,7 +1790,7 @@
                      groupPath="Kotlin"
                      groupName="Other problems"
                      enabledByDefault="true"
-                     level="INFO"
+                     level="WEAK WARNING"
                      language="kotlin"
     />
 
@@ -1799,7 +1799,7 @@
                      groupPath="Kotlin"
                      groupName="Style issues"
                      enabledByDefault="true"
-                     level="INFO"
+                     level="WEAK WARNING"
                      language="kotlin"
     />
 
@@ -1808,7 +1808,7 @@
                      groupPath="Kotlin"
                      groupName="Style issues"
                      enabledByDefault="true"
-                     level="INFO"
+                     level="WEAK WARNING"
                      language="kotlin"
     />
 
@@ -1817,7 +1817,7 @@
                      groupPath="Kotlin"
                      groupName="Style issues"
                      enabledByDefault="true"
-                     level="INFO"
+                     level="WEAK WARNING"
                      language="kotlin"
     />
 
@@ -1826,7 +1826,7 @@
                      groupPath="Kotlin"
                      groupName="Style issues"
                      enabledByDefault="true"
-                     level="INFO"
+                     level="WEAK WARNING"
                      language="kotlin"
     />
 
@@ -1835,7 +1835,7 @@
                      groupPath="Kotlin"
                      groupName="Style issues"
                      enabledByDefault="true"
-                     level="INFO"
+                     level="WEAK WARNING"
                      language="kotlin"
     />
 
@@ -1957,7 +1957,7 @@
                      groupPath="Kotlin"
                      groupName="Probable bugs"
                      enabledByDefault="true"
-                     level="INFO"
+                     level="WEAK WARNING"
                      language="kotlin"
     />
 
@@ -2031,7 +2031,7 @@
                      groupPath="Kotlin"
                      groupName="Style issues"
                      enabledByDefault="true"
-                     level="INFO"
+                     level="WEAK WARNING"
     />
 
     <localInspection implementationClass="org.jetbrains.kotlin.idea.inspections.ConflictingExtensionPropertyInspection"
@@ -2068,7 +2068,7 @@
                      groupName="Style issues"
                      enabledByDefault="false"
                      cleanupTool="false"
-                     level="INFO"
+                     level="WEAK WARNING"
                      language="kotlin"
     />
 
@@ -2245,7 +2245,7 @@
                      groupName="Redundant constructs"
                      enabledByDefault="true"
                      cleanupTool="true"
-                     level="INFO"
+                     level="WEAK WARNING"
                      language="kotlin"
     />
 
@@ -2300,7 +2300,7 @@
                      groupName="Redundant constructs"
                      enabledByDefault="true"
                      cleanupTool="true"
-                     level="INFO"
+                     level="WEAK WARNING"
                      language="kotlin"
     />
 
@@ -2356,7 +2356,7 @@
                      groupPath="Kotlin"
                      groupName="Style issues"
                      enabledByDefault="true"
-                     level="INFO"
+                     level="WEAK WARNING"
                      language="kotlin"
     />
 
@@ -2455,7 +2455,7 @@
                      groupPath="Kotlin"
                      groupName="Style issues"
                      enabledByDefault="true"
-                     level="INFO"
+                     level="WEAK WARNING"
                      language="kotlin"
     />
 
@@ -2465,7 +2465,7 @@
                      groupName="Style issues"
                      enabledByDefault="true"
                      cleanupTool="true"
-                     level="INFO"
+                     level="WEAK WARNING"
                      language="kotlin"
     />
 
@@ -2546,7 +2546,7 @@
                      groupPath="Kotlin"
                      groupName="Style issues"
                      enabledByDefault="true"
-                     level="INFO"
+                     level="WEAK WARNING"
                      language="kotlin"
     />
 
@@ -2555,7 +2555,7 @@
                      groupPath="Kotlin"
                      groupName="Style issues"
                      enabledByDefault="true"
-                     level="INFO"
+                     level="WEAK WARNING"
                      language="kotlin"
     />
 
@@ -3081,7 +3081,7 @@
                      groupPath="Kotlin"
                      groupName="Style issues"
                      enabledByDefault="true"
-                     level="INFO"
+                     level="WEAK WARNING"
                      language="kotlin"
     />
 
@@ -3225,7 +3225,7 @@
                      groupPath="Kotlin"
                      groupName="Style issues"
                      enabledByDefault="true"
-                     level="INFO"
+                     level="WEAK WARNING"
                      language="kotlin"
     />
 
@@ -3261,7 +3261,7 @@
                      groupPath="Kotlin"
                      groupName="Style issues"
                      enabledByDefault="true"
-                     level="INFO"
+                     level="WEAK WARNING"
                      language="kotlin"
     />
 
