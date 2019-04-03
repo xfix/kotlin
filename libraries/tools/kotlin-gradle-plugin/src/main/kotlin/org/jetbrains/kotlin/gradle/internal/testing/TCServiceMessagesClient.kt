@@ -21,6 +21,7 @@ import java.lang.System.currentTimeMillis as currentTimeMillis1
 
 data class TCServiceMessagesClientSettings(
     val rootNodeName: String,
+    val prepandSuiteName: Boolean = false,
     val treatFailedTestOutputAsStacktrace: Boolean = false
 )
 
@@ -77,9 +78,10 @@ internal class TCServiceMessagesClient(
 
     private fun beginTest(ts: Long, testName: String, isIgnored: Boolean = false) {
         val parent = requireLeafGroup()
-        parent.requireReportingNode()
+        val requireReportingNode = parent.requireReportingNode()
 
-        val parsedName = ParsedTestName(testName, parent.localId)
+        val finalTestName = if (settings.prepandSuiteName) "${parent.fullNameWithoutRoot}.$testName" else testName
+        val parsedName = ParsedTestName(finalTestName, parent.localId)
 
         open(
             ts, TestNode(
@@ -202,6 +204,9 @@ internal class TCServiceMessagesClient(
     ) {
         val id: String = if (parent != null) "${parent!!.id}/$localId" else localId
 
+        open val cleanName: String
+            get() = localId
+
         abstract val descriptor: TestDescriptorInternal?
 
         var state: NodeState = NodeState.created
@@ -278,6 +283,13 @@ internal class TCServiceMessagesClient(
     }
 
     abstract inner class GroupNode(parent: Node?, localId: String) : Node(parent, localId) {
+        val fullNameWithoutRoot: String
+            get() = collectParents().dropLast(1)
+                .reversed()
+                .map { it.localId }
+                .filter { it.isNotBlank() }
+                .joinToString(".") { it }
+
         abstract fun requireReportingNode(): TestDescriptorInternal
     }
 
@@ -299,12 +311,12 @@ internal class TCServiceMessagesClient(
 
     fun cleanName(parent: GroupNode, name: String): String {
         // Some test reporters may report test suite in name (Kotlin/Native)
-        val parentName = parent.collectParents().dropLast(1).reversed().joinToString(".") { it.localId }
+        val parentName = parent.fullNameWithoutRoot
         return name.removePrefix("$parentName.")
     }
 
     inner class SuiteNode(parent: GroupNode, name: String) : GroupNode(parent, name) {
-        private val cleanName = cleanName(parent, name)
+        override val cleanName = cleanName(parent, name)
 
         private var shouldReportComplete = false
 
@@ -317,52 +329,25 @@ internal class TCServiceMessagesClient(
          * Called when first test in suite started
          */
         private fun createReportingNode(): TestDescriptorInternal {
-            val collapsedSuites = mutableListOf<SuiteNode>()
-            var firstUnreportedSuite: SuiteNode = this
-            lateinit var reportingParent: GroupNode
+            val parents = collectParents()
+            val fullName = parents.reversed()
+                .map { it.cleanName }
+                .filter { it.isNotBlank() }
+                .joinToString(".")
 
-            loop@ while (true) {
-                collapsedSuites.add(firstUnreportedSuite)
-                val next = firstUnreportedSuite.parent
+            val reportingParent = parents.last() as RootNode
+            this.reportingParent = reportingParent
 
-                when (next) {
-                    is SuiteNode -> when {
-                        next.descriptor == null -> firstUnreportedSuite = next
-                        else -> {
-                            reportingParent = next
-                            break@loop
-                        }
-                    }
-                    is RootNode -> {
-                        reportingParent = next
-                        break@loop
-                    }
-                    else -> error("Bad suite parent: $next")
-                }
-            }
-
-            val name = collapsedSuites
-                .filter { it.cleanName.isNotBlank() }
-                .reversed()
-                .joinToString(".") { it.cleanName }
-
-            val fullName = reportingParent.descriptor!!.name + "." + name
-
-            val descriptor = object : DefaultTestSuiteDescriptor("${reportingParent.id}.$name", fullName) {
+            descriptor = object : DefaultTestSuiteDescriptor(id, fullName) {
                 override fun getParent(): TestDescriptorInternal? = reportingParent.descriptor
-            }
-
-            collapsedSuites.forEach {
-                it.descriptor = descriptor
-                it.reportingParent = reportingParent
             }
 
             shouldReportComplete = true
 
-            check(firstUnreportedSuite.startedTs != 0L)
-            reportStarted(firstUnreportedSuite.startedTs)
+            check(startedTs != 0L)
+            reportStarted(startedTs)
 
-            return descriptor
+            return descriptor!!
         }
 
         private var startedTs: Long = 0
@@ -373,8 +358,8 @@ internal class TCServiceMessagesClient(
         }
 
         override fun markCompleted(ts: Long) {
-            check(descriptor != null)
             if (shouldReportComplete) {
+                check(descriptor != null)
                 reportCompleted(ts)
             }
         }
