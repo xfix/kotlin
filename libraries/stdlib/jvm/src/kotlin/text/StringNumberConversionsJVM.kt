@@ -34,7 +34,10 @@ public actual inline fun Short.toString(radix: Int): String = this.toInt().toStr
  */
 @SinceKotlin("1.1")
 @kotlin.internal.InlineOnly
-public actual inline fun Int.toString(radix: Int): String = java.lang.Integer.toString(this, checkRadix(radix))
+public actual inline fun Int.toString(radix: Int): String {
+    @Suppress("ReplaceJavaIntegerToStringWithMember")
+    return java.lang.Integer.toString(this, checkRadix(radix))
+}
 
 /**
  * Returns a string representation of this [Long] value in the specified [radix].
