@@ -71,15 +71,7 @@ open class KotlinNodeJsTestTask : KotlinTestTask() {
             ignoredTestSuites.cli
         )
 
-        val clientSettings = when (testsGrouping) {
-            TestsGrouping.none -> TCServiceMessagesClientSettings(rootNodeName = name, skipRoots = true)
-            TestsGrouping.root -> TCServiceMessagesClientSettings(rootNodeName = name, nameOfRootSuiteToReplace = targetName)
-            TestsGrouping.leaf -> TCServiceMessagesClientSettings(
-                rootNodeName = name,
-                skipRoots = true,
-                nameOfLeafTestToAppend = targetName
-            )
-        }
+        val clientSettings = TCServiceMessagesClientSettings(name)
 
         return TCServiceMessagesTestExecutionSpec(
             extendedForkOptions,
