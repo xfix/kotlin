@@ -35,8 +35,8 @@
         <extensionPoint qualifiedName="org.jetbrains.kotlin.idePlatformKindTooling"
                         interface="org.jetbrains.kotlin.idea.platform.IdePlatformKindTooling"/>
 
-        <extensionPoint qualifiedName="org.jetbrains.kotlin.scriptRelatedModulesProvider"
-                        interface="org.jetbrains.kotlin.idea.core.script.dependencies.ScriptRelatedModulesProvider"
+        <extensionPoint qualifiedName="org.jetbrains.kotlin.scriptAdditionalIdeaDependenciesProvider"
+                        interface="org.jetbrains.kotlin.idea.core.script.dependencies.ScriptAdditionalIdeaDependenciesProvider"
                         area="IDEA_PROJECT"/>
 
         <extensionPoint qualifiedName="org.jetbrains.kotlin.scriptDefinitionsProvider"
@@ -79,6 +79,6 @@
         <idePlatformKindResolution implementation="org.jetbrains.kotlin.caches.resolve.CommonPlatformKindResolution"/>
 
         <scratchFileLanguageProvider language="kotlin" implementationClass="org.jetbrains.kotlin.idea.scratch.KtScratchFileLanguageProvider"/>
-        <scriptRelatedModulesProvider implementation="org.jetbrains.kotlin.idea.scratch.ScratchModuleDependencyProvider"/>
+        <scriptAdditionalIdeaDependenciesProvider implementation="org.jetbrains.kotlin.idea.scratch.ScratchAdditionalIdeaDependenciesProvider"/>
     </extensions>
 </idea-plugin>
