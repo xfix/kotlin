@@ -18,7 +18,7 @@ interface IrType {
      * whereas the real type checker from the compiler frontend would return `true`.
      *
      * Classes are compared by FQ names, which means that even if two types refer to different symbols of the class with the same FQ name,
-     * such types will be considered equal. Type annotations are not checked in this method.
+     * such types will be considered equal. Type annotations do not have any effect on the behavior of this method.
      */
     override fun equals(other: Any?): Boolean
 

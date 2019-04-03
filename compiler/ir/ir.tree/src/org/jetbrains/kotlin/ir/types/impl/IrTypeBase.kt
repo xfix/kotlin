@@ -24,9 +24,9 @@ class IrErrorTypeImpl(
     annotations: List<IrCall>,
     variance: Variance
 ) : IrTypeBase(kotlinType, annotations, variance), IrErrorType {
-    override fun equals(other: Any?): Boolean = other is IrErrorType
+    override fun equals(other: Any?): Boolean = other is IrErrorTypeImpl
 
-    override fun hashCode(): Int = 0
+    override fun hashCode(): Int = IrErrorTypeImpl::class.java.name.hashCode()
 }
 
 class IrDynamicTypeImpl(
@@ -34,9 +34,9 @@ class IrDynamicTypeImpl(
     annotations: List<IrCall>,
     variance: Variance
 ) : IrTypeBase(kotlinType, annotations, variance), IrDynamicType, IrTypeProjection {
-    override fun equals(other: Any?): Boolean = other is IrDynamicType
+    override fun equals(other: Any?): Boolean = other is IrDynamicTypeImpl
 
-    override fun hashCode(): Int = 1
+    override fun hashCode(): Int = IrDynamicTypeImpl::class.java.name.hashCode()
 }
 
 
@@ -45,9 +45,9 @@ val IrType.originalKotlinType: KotlinType?
 
 
 object IrStarProjectionImpl : IrStarProjection {
-    override fun equals(other: Any?): Boolean = other is IrStarProjection
+    override fun equals(other: Any?): Boolean = this === other
 
-    override fun hashCode(): Int = 2
+    override fun hashCode(): Int = System.identityHashCode(this)
 }
 
 @Deprecated("Hack to temporary cover late type initialization")
@@ -56,5 +56,5 @@ object IrUninitializedType : IrType {
 
     override fun equals(other: Any?): Boolean = this === other
 
-    override fun hashCode(): Int = 3
+    override fun hashCode(): Int = System.identityHashCode(this)
 }

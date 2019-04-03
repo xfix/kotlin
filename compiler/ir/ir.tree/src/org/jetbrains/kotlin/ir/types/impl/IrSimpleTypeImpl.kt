@@ -47,15 +47,15 @@ class IrSimpleTypeImpl(
             )
 
     override fun equals(other: Any?): Boolean =
-        other is IrSimpleType &&
+        other is IrSimpleTypeImpl &&
                 FqNameEqualityChecker.areEqual(classifier, other.classifier) &&
-                arguments == other.arguments
+                hasQuestionMark == other.hasQuestionMark &&
+                arguments == other.arguments &&
+                variance == other.variance
 
-    override fun hashCode(): Int {
-        var result = classifier.hashCode()
-        result = 31 * result + arguments.fold(0) { acc, arg -> 31 * acc + arg.hashCode() }
-        return 31 * result + if (hasQuestionMark) 1 else 0
-    }
+    override fun hashCode(): Int =
+        ((FqNameEqualityChecker.getHashCode(classifier) * 31 + hasQuestionMark.hashCode()) * 31 +
+                arguments.hashCode()) * 31 + variance.hashCode()
 }
 
 class IrTypeProjectionImpl internal constructor(
@@ -63,11 +63,10 @@ class IrTypeProjectionImpl internal constructor(
     override val variance: Variance
 ) : IrTypeProjection {
     override fun equals(other: Any?): Boolean =
-        other is IrTypeProjection && type == other.type && variance == other.variance
+        other is IrTypeProjectionImpl && type == other.type && variance == other.variance
 
-    override fun hashCode(): Int {
-        return 31 * type.hashCode() + variance.hashCode()
-    }
+    override fun hashCode(): Int =
+        type.hashCode() * 31 + variance.hashCode()
 }
 
 fun makeTypeProjection(type: IrType, variance: Variance): IrTypeProjection =
