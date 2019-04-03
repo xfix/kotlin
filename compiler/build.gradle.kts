@@ -68,8 +68,8 @@ dependencies {
 
     testRuntime(project(":kotlin-reflect"))
     testRuntime(project(":kotlin-daemon-client-new"))
-    testRuntime(project(":compiler:daemon")) // +
-    testRuntime(project(":compiler:daemon-common-new")) // +
+    testRuntime(project(":daemon")) // +
+    testRuntime(project(":daemon-common-new")) // +
     testRuntime(commonDep("org.jetbrains.kotlinx", "kotlinx-coroutines-jdk8")) {
         isTransitive = false
     }

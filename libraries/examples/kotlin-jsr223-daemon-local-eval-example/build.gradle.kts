@@ -24,7 +24,7 @@ dependencies {
     compilerClasspath(commonDep("org.jetbrains.intellij.deps", "trove4j"))
     compileOnly(project(":compiler:cli-common")) // TODO: fix import (workaround for jps build)
     testCompileOnly(project(":core:util.runtime")) // TODO: fix import (workaround for jps build)
-    testCompileOnly(project(":compiler:daemon-common")) // TODO: fix import (workaround for jps build)
+    testCompileOnly(project(":daemon-common")) // TODO: fix import (workaround for jps build)
 }
 
 projectTest {
