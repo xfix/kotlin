@@ -21,7 +21,7 @@ open class GenerateProjectStructureMetadata : DefaultTask() {
 
     @get:OutputFile
     val resultXmlFile: File
-        get() = project.buildDir.resolve("kotlinMultiplatformMetadata/$MULTIPLATFORM_PROJECT_METADATA_FILE_NAME")
+        get() = project.buildDir.resolve("kotlinProjectStructureMetadata/$MULTIPLATFORM_PROJECT_METADATA_FILE_NAME")
 
     @TaskAction
     fun generateMetadataXml() {

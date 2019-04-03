@@ -11,25 +11,30 @@ import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 import org.jetbrains.kotlin.gradle.targets.metadata.getPublishedPlatformCompilations
 
+internal data class DependencySourceSetVisibilityResult(
+    val sourceSetsVisibleByThisSourceSet: Set<String>,
+    val sourceSetsVisibleThroughDependsOn: Set<String>
+)
+
 internal class SourceSetVisibilityProvider(
     private val project: Project
 ) {
-    fun getVisibleSourceSetsExcludingDependsOn(
+    fun getVisibleSourceSets(
         visibleFrom: KotlinSourceSet,
         mppDependency: ResolvedDependency,
-        dependencyProjectMetadata: KotlinProjectStructureMetadata,
+        dependencyProjectStructureMetadata: KotlinProjectStructureMetadata,
         otherProject: Project?
-    ): Set<String> {
-        val visibleByThisSourceSet = getVisibleSourceSets(visibleFrom, mppDependency, dependencyProjectMetadata, otherProject)
-        val visibleByParents =
-            visibleFrom.dependsOn.map { getVisibleSourceSets(it, mppDependency, dependencyProjectMetadata, otherProject) }
+    ): DependencySourceSetVisibilityResult {
+        val visibleByThisSourceSet = getVisibleSourceSetsImpl(visibleFrom, mppDependency, dependencyProjectStructureMetadata, otherProject)
 
-        return visibleByThisSourceSet
-            .filterTo(mutableSetOf()) { item -> visibleByParents.none { visibleThroughDependsOn -> item in visibleThroughDependsOn } }
+        val visibleByParents = visibleFrom.dependsOn
+            .flatMapTo(mutableSetOf()) { getVisibleSourceSetsImpl(it, mppDependency, dependencyProjectStructureMetadata, otherProject) }
+
+        return DependencySourceSetVisibilityResult(visibleByThisSourceSet, visibleByParents)
     }
 
     @Suppress("UnstableApiUsage")
-    fun getVisibleSourceSets(
+    private fun getVisibleSourceSetsImpl(
         visibleFrom: KotlinSourceSet,
         mppDependency: ResolvedDependency,
         dependencyProjectMetadata: KotlinProjectStructureMetadata,

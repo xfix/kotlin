@@ -24,8 +24,8 @@ object KotlinSourceSetsMetadata {
         override fun execute(t: MultipleCandidatesDetails<String>) = with(t) {
             when {
                 consumerValue in candidateValues -> closestMatch(consumerValue)
-                candidateValues.contains(DEPENDENCIES_ONLY) -> closestMatch(
-                    DEPENDENCIES_ONLY
+                candidateValues.contains(ALL_SOURCE_SETS) -> closestMatch(
+                    ALL_SOURCE_SETS
                 )
             }
         }
