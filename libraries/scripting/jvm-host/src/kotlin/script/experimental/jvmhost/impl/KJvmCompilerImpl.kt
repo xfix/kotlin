@@ -382,7 +382,7 @@ class KJvmCompilerImpl(val hostConfiguration: ScriptingHostConfiguration) : KJvm
                 getScriptConfiguration(ktScript.containingKtFile),
                 ktScript.fqName.asString(),
                 makeOtherScripts(ktScript),
-                KJvmCompiledModule(generationState)
+                makeCompiledModule(generationState)
             )
         }
 

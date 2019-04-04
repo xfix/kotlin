@@ -5,35 +5,21 @@
 
 package kotlin.script.experimental.jvmhost.impl
 
-import org.jetbrains.kotlin.codegen.state.GenerationState
 import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
 import java.io.Serializable
-import java.net.URLClassLoader
 import kotlin.reflect.KClass
 import kotlin.script.experimental.api.*
-import kotlin.script.experimental.jvm.JvmDependency
-import kotlin.script.experimental.jvmhost.*
-
-class KJvmCompiledModule(
-    generationState: GenerationState
-) : Serializable {
-    val compilerOutputFiles: Map<String, ByteArray> =
-        generationState.factory.asList()
-            .associateTo(sortedMapOf<String, ByteArray>()) { it.relativePath to it.asByteArray() }
-
-    companion object {
-        @JvmStatic
-        private val serialVersionUID = 0L
-    }
-}
+import kotlin.script.experimental.jvmhost.actualClassLoader
+import kotlin.script.experimental.jvmhost.jvm
+import kotlin.script.experimental.util.getOrError
 
 class KJvmCompiledScript<out ScriptBase : Any>(
     sourceLocationId: String?,
     compilationConfiguration: ScriptCompilationConfiguration,
     private var scriptClassFQName: String,
     otherScripts: List<CompiledScript<*>> = emptyList(),
-    internal var compiledModule: KJvmCompiledModule? = null
+    internal var compiledModule: KJvmCompiledModule
 ) : CompiledScript<ScriptBase>, Serializable {
 
     private var _sourceLocationId: String? = sourceLocationId
@@ -54,21 +40,7 @@ class KJvmCompiledScript<out ScriptBase : Any>(
     override suspend fun getClass(scriptEvaluationConfiguration: ScriptEvaluationConfiguration?): ResultWithDiagnostics<KClass<*>> = try {
         // ensuring proper defaults are used
         val actualEvaluationConfiguration = scriptEvaluationConfiguration ?: ScriptEvaluationConfiguration()
-        val classLoader = actualEvaluationConfiguration[ScriptEvaluationConfiguration.jvm.actualClassLoader]
-            ?: run {
-                if (compiledModule == null)
-                    return ResultWithDiagnostics.Failure(
-                        "Unable to load class $scriptClassFQName: no compiled module is provided".asErrorDiagnostics(path = sourceLocationId)
-                    )
-                val baseClassLoader = actualEvaluationConfiguration[ScriptEvaluationConfiguration.jvm.baseClassLoader]
-                val dependencies = compilationConfiguration[ScriptCompilationConfiguration.dependencies]
-                    ?.flatMap { (it as? JvmDependency)?.classpath?.map { it.toURI().toURL() } ?: emptyList() }
-                // TODO: previous dependencies and classloaders should be taken into account here
-                val classLoaderWithDeps =
-                    if (dependencies == null) baseClassLoader
-                    else URLClassLoader(dependencies.toTypedArray(), baseClassLoader)
-                CompiledScriptClassLoader(classLoaderWithDeps, compiledModule!!.compilerOutputFiles)
-            }
+        val classLoader = actualEvaluationConfiguration.getOrError(ScriptEvaluationConfiguration.jvm.actualClassLoader)!!
 
         val clazz = classLoader.loadClass(scriptClassFQName).kotlin
         clazz.asSuccess()
@@ -101,12 +73,12 @@ class KJvmCompiledScript<out ScriptBase : Any>(
         _compilationConfiguration = null
         _sourceLocationId = inputStream.readObject() as String?
         _otherScripts = inputStream.readObject() as List<CompiledScript<*>>
-        compiledModule = inputStream.readObject() as KJvmCompiledModule?
+        compiledModule = inputStream.readObject() as KJvmCompiledModuleInMemory
         scriptClassFQName = inputStream.readObject() as String
     }
 
     companion object {
         @JvmStatic
-        private val serialVersionUID = 1L
+        private val serialVersionUID = 2L
     }
 }
