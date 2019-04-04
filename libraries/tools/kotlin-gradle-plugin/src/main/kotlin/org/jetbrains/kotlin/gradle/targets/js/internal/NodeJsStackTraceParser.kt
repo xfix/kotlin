@@ -97,6 +97,10 @@ fun parseNodeJsStackTrace(stackTrace: String): NodeJsStackTrace {
                         methodName = "init"
                     }
                 }
+
+                if (className != null) {
+                    className = filterClassName(className)
+                }
             }
 
             stack.add(
@@ -120,6 +124,9 @@ fun parseNodeJsStackTrace(stackTrace: String): NodeJsStackTrace {
         if (stack.isEmpty()) null else stack
     )
 }
+
+fun filterClassName(className: String): String =
+    className.replace('$', '.')
 
 private fun filterMethodName(name: String): String =
     if ("_" in name) {
