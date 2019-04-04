@@ -7,6 +7,7 @@ package test.text
 
 import kotlin.test.*
 import test.*
+import test.collections.assertArrayNotSameButEquals
 import test.collections.behaviors.iteratorBehavior
 import test.collections.compare
 import kotlin.math.sign
@@ -47,37 +48,51 @@ class StringTest {
 
     @Test fun stringFromCharArrayFullSlice() {
         val chars: CharArray = charArrayOf('K', 'o', 't', 'l', 'i', 'n')
-        assertEquals("Kotlin", String(chars, 0, chars.size))
+        assertEquals("Kotlin", String(chars, offset = 0, length = chars.size))
+        assertEquals("Kotlin", stringFrom(chars, startIndex = 0, endIndex = chars.size))
     }
 
     @Test fun stringFromCharArraySlice() {
         val chars: CharArray = charArrayOf('K', 'o', 't', 'l', 'i', 'n', ' ', 'r', 'u', 'l', 'e', 's')
-        assertEquals("rule", String(chars, 7, 4))
+        assertEquals("rule", String(chars, offset = 7, length = 4))
+        assertEquals("rule", stringFrom(chars, startIndex = 7, endIndex = 11))
 
         val longChars = CharArray(200_000) { 'k' }
-        val longString = String(longChars, 1000, 190_000)
+        val longString = String(longChars, offset = 1000, length = 190_000)
+        val longStringFrom = stringFrom(longChars, startIndex = 1000, endIndex = 191_000)
         assertEquals(190_000, longString.length)
+        assertEquals(190_000, longStringFrom.length)
         assertTrue(longString.all { it == 'k' })
+        assertTrue(longStringFrom.all { it == 'k' })
     }
 
     @Test fun stringFromCharArray() {
         val chars: CharArray = charArrayOf('K', 'o', 't', 'l', 'i', 'n')
         assertEquals("Kotlin", String(chars))
+        assertEquals("Kotlin", stringFrom(chars))
 
         val longChars = CharArray(200_000) { 'k' }
         val longString = String(longChars)
+        val longStringFrom = stringFrom(longChars)
         assertEquals(200_000, longString.length)
+        assertEquals(200_000, longStringFrom.length)
         assertTrue(longString.all { it == 'k' })
+        assertTrue(longStringFrom.all { it == 'k' })
     }
 
     @Test fun stringFromCharArrayUnicodeSurrogatePairs() {
         val chars: CharArray = charArrayOf('Ц', '月', '語', '\u016C', '\u138D', '\uD83C', '\uDC3A')
         assertEquals("Ц月語Ŭᎍ🀺", String(chars))
-        assertEquals("月", String(chars, 1, 1))
-        assertEquals("Ŭᎍ🀺", String(chars, 3, 4))
+        assertEquals("月", String(chars, offset = 1, length = 1))
+        assertEquals("Ŭᎍ🀺", String(chars, offset = 3, length = 4))
+
+        assertEquals("Ц月語Ŭᎍ🀺", stringFrom(chars))
+        assertEquals("月", stringFrom(chars, startIndex = 1, endIndex = 2))
+        assertEquals("Ŭᎍ🀺", stringFrom(chars, startIndex = 3, endIndex = 7))
     }
 
     @Test fun stringFromCharArrayOutOfBounds() {
+        // IllegalArgumentException
         fun test(chars: CharArray) {
             assertFailsWith<IndexOutOfBoundsException> { String(chars, -1, 1) }
             assertFailsWith<IndexOutOfBoundsException> { String(chars, 1, -1) }
@@ -1469,5 +1484,86 @@ ${"    "}
 
         assertFailsWith<IndexOutOfBoundsException> { "".elementAt(0) }
         assertFailsWith<IndexOutOfBoundsException> { "a c".elementAt(-1) }
+    }
+
+    @Test
+    fun toCharArray() {
+        val s = "hello"
+        val chars = s.toCharArray()
+        assertArrayNotSameButEquals(charArrayOf('h', 'e', 'l', 'l', 'o'), chars)
+
+        val buffer = s.toCharArray(1, 3)
+        assertArrayNotSameButEquals(charArrayOf('e', 'l'), buffer)
+
+        assertFailsWith<IndexOutOfBoundsException> { s.toCharArray(-1) }
+        assertFailsWith<IndexOutOfBoundsException> { s.toCharArray(0, 6) }
+        assertFailsWith<IllegalArgumentException> { s.toCharArray(3, 1) }
+    }
+
+    @Test
+    fun toByteArray() {
+        fun bytesFrom(vararg ints: Int): ByteArray {
+            return ByteArray(ints.size) { ints[it].toByte() }
+        }
+
+        assertArrayNotSameButEquals("".toByteArray(), bytesFrom())
+
+        assertArrayNotSameButEquals("\u0000".toByteArray(), bytesFrom(0))
+        assertArrayNotSameButEquals("-".toByteArray(), bytesFrom(0x2D))
+        assertArrayNotSameButEquals("\u007F".toByteArray(), bytesFrom(0x7F))
+
+        assertArrayNotSameButEquals("\u0080".toByteArray(), bytesFrom(0xC2, 0x80))
+        assertArrayNotSameButEquals("¿".toByteArray(), bytesFrom(0xC2, 0xBF))
+        assertArrayNotSameButEquals("\u07FF".toByteArray(), bytesFrom(0xDF, 0xBF))
+
+        assertArrayNotSameButEquals("\u0800".toByteArray(), bytesFrom(0xE0, 0xA0, 0x80))
+        assertArrayNotSameButEquals("斤".toByteArray(), bytesFrom(0xE6, 0x96, 0xA4))
+        assertArrayNotSameButEquals("\uD7FF".toByteArray(), bytesFrom(0xED, 0x9F, 0xBF))
+
+        assertArrayNotSameButEquals("\uD800".toByteArray(), bytesFrom(0x3F))
+        assertArrayNotSameButEquals("\uDB6A".toByteArray(), bytesFrom(0x3F))
+        assertArrayNotSameButEquals("\uDFFF".toByteArray(), bytesFrom(0x3F))
+
+        assertArrayNotSameButEquals("\uE000".toByteArray(), bytesFrom(0xEE, 0x80, 0x80))
+        assertArrayNotSameButEquals("\uF63C".toByteArray(), bytesFrom(0xEF, 0x98, 0xBC))
+        assertArrayNotSameButEquals("\uFFFF".toByteArray(), bytesFrom(0xEF, 0xBF, 0xBF))
+
+        assertArrayNotSameButEquals("\uD800\uDC00".toByteArray(), bytesFrom(0xF0, 0x90, 0x80, 0x80))
+        assertArrayNotSameButEquals("\uDA49\uDDFC".toByteArray(), bytesFrom(0xF2, 0xA2, 0x97, 0xBC))
+        assertArrayNotSameButEquals("\uDBFF\uDFFF".toByteArray(), bytesFrom(0xF4, 0x8F, 0xBF, 0xBF))
+
+        assertArrayNotSameButEquals(
+            "\u0000-\u007F\u0080¿\u07FF\u0800斤\uD7FFz\uDFFF\uD800z\uDB6Az\uDB6A".toByteArray(),
+            bytesFrom(
+                0, 0x2D, 0x7F, 0xC2, 0x80, 0xC2, 0xBF, 0xDF, 0xBF, 0xE0, 0xA0, 0x80,
+                0xE6, 0x96, 0xA4, 0xED, 0x9F, 0xBF, 0x7A, 0x3F, 0x3F, 0x7A, 0x3F, 0x7A, 0x3F
+            )
+        )
+    }
+
+    @Test
+    fun stringFromByteArray() {
+        fun stringFromBytes(vararg elements: Int): String {
+            val byteArray = ByteArray(elements.size) { elements[it].toByte() }
+            return stringFrom(byteArray)
+        }
+
+        assertEquals("zC", stringFromBytes(0x7A, 0x43)) // one-byte chars
+
+        assertEquals("��", stringFromBytes(0x85, 0xAF)) // invalid bytes starting with 1 bit
+        assertEquals("¿", stringFromBytes(0xC2, 0xBF)) // two-byte char
+        assertEquals("�z", stringFromBytes(0xCF, 0x7A)) // two-byte char, second byte starts with 0 bit
+        assertEquals("��", stringFromBytes(0xC1, 0xAA)) // one-byte char written in two bytes
+
+        assertEquals("�z", stringFromBytes(0xEF, 0xAF, 0x7A)) // three-byte char, third byte starts with 0 bit
+        assertEquals("���", stringFromBytes(0xE0, 0x9F, 0xAF)) // two-byte char written in two bytes
+        assertEquals("�z", stringFromBytes(0xE0, 0xAF, 0x7A)) // three-byte char, third byte starts with 0 bit
+        assertEquals("\u1FFF", stringFromBytes(0xE1, 0xBF, 0xBF)) // three-byte char
+        assertEquals("�", stringFromBytes(0xED, 0xAF, 0xBF)) // three-byte surrogate char
+        assertEquals("�", stringFromBytes(0xE0, 0xAF)) // three-byte char, third byte out of bounds
+
+        assertEquals("\uD83D\uDFDF", stringFromBytes(0xF0, 0x9F, 0x9F, 0x9F)) // four-byte char
+        assertEquals("����", stringFromBytes(0xF0, 0x8F, 0x9F, 0x9F)) // three-byte char written in four bytes
+        assertEquals("����", stringFromBytes(0xF4, 0x9F, 0x9F, 0x9F)) // four-byte code point larger than 0x10FFFF
     }
 }

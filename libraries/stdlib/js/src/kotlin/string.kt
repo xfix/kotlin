@@ -36,6 +36,36 @@ public actual fun String(chars: CharArray, offset: Int, length: Int): String {
     return result
 }
 
+public actual fun stringFrom(
+    bytes: ByteArray,
+    startIndex: Int,
+    endIndex: Int,
+    throwOnInvalidSequence: Boolean
+): String {
+    AbstractList.checkRangeIndexes(startIndex, endIndex, bytes.size) // fromIndex & toIndex
+    return UTF8Coder.decode(bytes, startIndex, endIndex, throwOnInvalidSequence)
+}
+
+public actual fun stringFrom(chars: CharArray, startIndex: Int, endIndex: Int): String {
+    AbstractList.checkRangeIndexes(startIndex, endIndex, chars.size)
+    var result = ""
+    for (index in startIndex until endIndex) {
+        result += chars[index]
+    }
+    return result
+}
+
+public actual fun String.toByteArray(startIndex: Int, endIndex: Int, throwOnInvalidSequence: Boolean): ByteArray {
+    checkStringBounds(startIndex, endIndex, length)
+    return UTF8Coder.encode(this, startIndex, endIndex, throwOnInvalidSequence)
+}
+
+public actual fun String.toCharArray(startIndex: Int, endIndex: Int): CharArray {
+    checkStringBounds(startIndex, endIndex, length)
+    // BoxedChar created for every char instance
+    return CharArray(endIndex - startIndex) { get(it) }
+}
+
 /**
  * Returns a copy of this string converted to upper case using the rules of the default locale.
  *

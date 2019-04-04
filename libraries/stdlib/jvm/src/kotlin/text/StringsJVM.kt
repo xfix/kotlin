@@ -108,6 +108,31 @@ public actual inline fun String.toUpperCase(): String = (this as java.lang.Strin
 @kotlin.internal.InlineOnly
 public actual inline fun String.toLowerCase(): String = (this as java.lang.String).toLowerCase()
 
+public actual fun stringFrom(
+    bytes: ByteArray,
+    startIndex: Int,
+    endIndex: Int,
+    throwOnInvalidSequence: Boolean
+): String {
+//    AbstractList.checkRangeIndexes(startIndex, endIndex, bytes.size) // fromIndex & toIndex
+    return UTF8Coder.decode(bytes, startIndex, endIndex, throwOnInvalidSequence)
+}
+
+public actual fun stringFrom(chars: CharArray, startIndex: Int, endIndex: Int): String {
+//    AbstractList.checkRangeIndexes(startIndex, endIndex, chars.size)
+    return java.lang.String(chars, startIndex, endIndex - startIndex) as String
+}
+
+public actual fun String.toByteArray(startIndex: Int, endIndex: Int, throwOnInvalidSequence: Boolean): ByteArray {
+    checkStringBounds(startIndex, endIndex, length)
+    return UTF8Coder.encode(this, startIndex, endIndex, throwOnInvalidSequence)
+}
+
+public actual fun String.toCharArray(startIndex: Int, endIndex: Int): CharArray {
+    checkStringBounds(startIndex, endIndex, length)
+    return this.toCharArray(CharArray(endIndex - startIndex), 0, startIndex, endIndex)
+}
+
 /**
  * Returns a new character array containing the characters from this string.
  */
