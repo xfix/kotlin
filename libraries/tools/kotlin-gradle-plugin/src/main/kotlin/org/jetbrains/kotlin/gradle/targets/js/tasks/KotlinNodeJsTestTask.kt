@@ -71,7 +71,11 @@ open class KotlinNodeJsTestTask : KotlinTestTask() {
             ignoredTestSuites.cli
         )
 
-        val clientSettings = TCServiceMessagesClientSettings(name, prepandSuiteName = true)
+        val clientSettings = TCServiceMessagesClientSettings(
+            name,
+            testNameSuffix = if (showTestTargetName) targetName else null,
+            prepandSuiteName = true
+        )
 
         return TCServiceMessagesTestExecutionSpec(
             extendedForkOptions,

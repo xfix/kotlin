@@ -25,6 +25,7 @@ import org.gradle.language.base.plugins.LifecycleBasePlugin
 import org.gradle.language.jvm.tasks.ProcessResources
 import org.jetbrains.kotlin.gradle.dsl.kotlinExtension
 import org.jetbrains.kotlin.gradle.plugin.mpp.*
+import org.jetbrains.kotlin.gradle.testing.registerTestTask
 import org.jetbrains.kotlin.gradle.utils.lowerCamelCaseName
 import java.util.concurrent.Callable
 
@@ -361,6 +362,8 @@ abstract class KotlinTargetConfigurator<KotlinCompilationType : KotlinCompilatio
             ?: return // Otherwise, there is no runtime classpath
 
         target.project.tasks.create(lowerCamelCaseName(target.disambiguationClassifier, testTaskNameSuffix), Test::class.java).apply {
+            registerTestTask(this)
+
             project.afterEvaluate {
                 // use afterEvaluate to override the JavaPlugin defaults for Test tasks
                 conventionMapping.map("testClassesDirs") { testCompilation.output.classesDirs }

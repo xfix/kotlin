@@ -45,7 +45,12 @@ open class KotlinNativeTestTask : KotlinTestTask() {
         val extendedForkOptions = DefaultProcessForkOptions(fileResolver)
         processOptions.copyTo(extendedForkOptions)
 
-        val clientSettings = TCServiceMessagesClientSettings(name, treatFailedTestOutputAsStacktrace = true)
+        val clientSettings = TCServiceMessagesClientSettings(
+            name,
+            testNameSuffix = if (showTestTargetName) targetName else null,
+            prepandSuiteName = showTestTargetName,
+            treatFailedTestOutputAsStacktrace = true
+        )
 
         val cliArgs = CliArgs("TEAMCITY", includePatterns, excludePatterns)
 

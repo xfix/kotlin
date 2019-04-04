@@ -21,6 +21,7 @@ import java.lang.System.currentTimeMillis as currentTimeMillis1
 
 data class TCServiceMessagesClientSettings(
     val rootNodeName: String,
+    val testNameSuffix: String? = null,
     val prepandSuiteName: Boolean = false,
     val treatFailedTestOutputAsStacktrace: Boolean = false
 )
@@ -78,15 +79,21 @@ internal class TCServiceMessagesClient(
 
     private fun beginTest(ts: Long, testName: String, isIgnored: Boolean = false) {
         val parent = requireLeafGroup()
-        val requireReportingNode = parent.requireReportingNode()
+        parent.requireReportingNode()
 
-        val finalTestName = if (settings.prepandSuiteName) "${parent.fullNameWithoutRoot}.$testName" else testName
+        val finalTestName = testName.let {
+            if (settings.prepandSuiteName) "${parent.fullNameWithoutRoot}.$it"
+            else it
+        }
+
         val parsedName = ParsedTestName(finalTestName, parent.localId)
+        val methodName = if (settings.testNameSuffix == null) parsedName.methodName
+        else "${parsedName.methodName}[${settings.testNameSuffix}]"
 
         open(
             ts, TestNode(
-                parent, parsedName.className, parsedName.classDisplayName, parsedName.methodName,
-                displayName = parsedName.methodName,
+                parent, parsedName.className, parsedName.classDisplayName, methodName,
+                displayName = methodName,
                 localId = testName,
                 ignored = isIgnored
             )
@@ -129,7 +136,6 @@ internal class TCServiceMessagesClient(
         contents(it)
         System.currentTimeMillis()
     }
-
 
     private inline fun <NodeType : Node> NodeType.open(tsStart: Long, contents: (NodeType) -> Long) {
         val child = open(tsStart, this@open)
