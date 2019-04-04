@@ -32,17 +32,17 @@ import java.util.*
 
 object ImportPathComparator : Comparator<ImportPath> {
     override fun compare(import1: ImportPath, import2: ImportPath): Int {
-        // alias imports placed last
-        if (import1.hasAlias() != import2.hasAlias()) {
-            return if (import1.hasAlias()) +1 else -1
-        }
-
-        // standard library imports last
-        val stdlib1 = isJavaOrKotlinStdlibImport(import1)
-        val stdlib2 = isJavaOrKotlinStdlibImport(import2)
-        if (stdlib1 != stdlib2) {
-            return if (stdlib1) +1 else -1
-        }
+//        // alias imports placed last
+//        if (import1.hasAlias() != import2.hasAlias()) {
+//            return if (import1.hasAlias()) +1 else -1
+//        }
+//
+//        // standard library imports last
+//        val stdlib1 = isJavaOrKotlinStdlibImport(import1)
+//        val stdlib2 = isJavaOrKotlinStdlibImport(import2)
+//        if (stdlib1 != stdlib2) {
+//            return if (stdlib1) +1 else -1
+//        }
 
         return import1.toString().compareTo(import2.toString())
     }
