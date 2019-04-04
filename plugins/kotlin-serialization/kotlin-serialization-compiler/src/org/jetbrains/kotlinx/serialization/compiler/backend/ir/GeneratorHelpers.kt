@@ -38,7 +38,6 @@ import org.jetbrains.kotlin.types.Variance
 import org.jetbrains.kotlin.types.typeUtil.isTypeParameter
 import org.jetbrains.kotlin.types.typeUtil.makeNotNullable
 import org.jetbrains.kotlinx.serialization.compiler.backend.common.findTypeSerializerOrContext
-import org.jetbrains.kotlinx.serialization.compiler.backend.common.isSerializationCtor
 import org.jetbrains.kotlinx.serialization.compiler.backend.jvm.contextSerializerId
 import org.jetbrains.kotlinx.serialization.compiler.backend.jvm.enumSerializerId
 import org.jetbrains.kotlinx.serialization.compiler.backend.jvm.polymorphicSerializerId
@@ -532,7 +531,7 @@ interface IrBuilderExtension {
             val serializable = getSerializableClassDescriptorBySerializer(serializerClass)
             val ctor = if (serializable?.declaredTypeParameters?.isNotEmpty() == true) {
                 requireNotNull(
-                    KSerializerDescriptorResolver.findSerializerConstructorForTypeArgumentsSerializers(serializerClass)
+                    findSerializerConstructorForTypeArgumentsSerializers(serializerClass)
                 ) { "Generated serializer does not have constructor with required number of arguments" }
                     .let { compilerContext.externalSymbols.referenceConstructor(it) }
             } else {
