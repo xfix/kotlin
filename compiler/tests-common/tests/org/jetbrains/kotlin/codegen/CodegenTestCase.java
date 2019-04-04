@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2018 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license
+ * Copyright 2010-2019 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license
  * that can be found in the license/LICENSE.txt file.
  */
 
@@ -885,5 +885,46 @@ public abstract class CodegenTestCase extends KtUsefulTestCase {
         }
 
         return new TestProxy(Integer.valueOf(boxInSeparateProcessPort), aClass.getCanonicalName(), classPath).runTest();
+    }
+
+    protected void doTailCallOptimizationTest(File wholeFile) throws Exception {
+        List<String> continuationClasses =
+                InTextDirectivesUtils.findLinesWithPrefixesRemoved(FileUtil.loadFile(wholeFile), "// CHECK_NO_CONTINUATION:");
+        if (continuationClasses.isEmpty()) return;
+        String text = getBytecodeListingTextWithoutCoroutineHelpers();
+        for (String continuationClass : continuationClasses) {
+            if (text.contains(continuationClass)) {
+                throw new AssertionError("Tail-call optimization miss: expected continuation class '" + continuationClass +
+                                         "' to be removed, but it is present: \n" + text);
+            }
+        }
+    }
+
+    @NotNull
+    protected String getBytecodeListingTextWithoutCoroutineHelpers() {
+        return BytecodeListingTextCollectingVisitor.Companion.getText(
+                classFileFactory,
+                new BytecodeListingTextCollectingVisitor.Filter() {
+                    @Override
+                    public boolean shouldWriteClass(int access, @NotNull String name) {
+                        return !name.startsWith("helpers/");
+                    }
+
+                    @Override
+                    public boolean shouldWriteMethod(int access, @NotNull String name, @NotNull String desc) {
+                        return true;
+                    }
+
+                    @Override
+                    public boolean shouldWriteField(int access, @NotNull String name, @NotNull String desc) {
+                        return true;
+                    }
+
+                    @Override
+                    public boolean shouldWriteInnerClass(@NotNull String name) {
+                        return true;
+                    }
+                }
+        );
     }
 }

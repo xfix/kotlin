@@ -1,5 +1,21 @@
 // COMMON_COROUTINES_TEST
 // WITH_RUNTIME
+// CHECK_NO_CONTINUATION: empty$1
+// CHECK_NO_CONTINUATION: generic$1
+// CHECK_NO_CONTINUATION: genericInferType$1
+// CHECK_NO_CONTINUATION: lambdaAsParameter$1
+// CHECK_NO_CONTINUATION: lambdaAsParameterReturn$1
+// CHECK_NO_CONTINUATION: multipleExitPoints$1
+// CHECK_NO_CONTINUATION: multipleExitPointsWhen$1
+// CHECK_NO_CONTINUATION: multipleExitPointsWithOrdinaryInline$1
+// CHECK_NO_CONTINUATION: nullableUnit$1
+// CHECK_NO_CONTINUATION: returnsInt$1
+// CHECK_NO_CONTINUATION: twoReturns$1
+// CHECK_NO_CONTINUATION: useGenericClass$1
+// CHECK_NO_CONTINUATION: useGenericInferType$1
+// CHECK_NO_CONTINUATION: useGenericReturningUnit$1
+// CHECK_NO_CONTINUATION: useRunRunRunRunRun$1
+// CHECK_NO_CONTINUATION: withoutReturn$1
 
 suspend fun empty() {}
 suspend fun withoutReturn() {

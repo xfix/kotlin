@@ -1,3 +1,5 @@
+// CHECK_NO_CONTINUATION: process$1
+
 sealed class X {
     class A : X()
     class B : X()

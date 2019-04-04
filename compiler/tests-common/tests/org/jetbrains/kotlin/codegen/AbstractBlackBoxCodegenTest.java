@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2018 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license
+ * Copyright 2010-2019 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license
  * that can be found in the license/LICENSE.txt file.
  */
 
@@ -57,6 +57,7 @@ public abstract class AbstractBlackBoxCodegenTest extends CodegenTestCase {
             throw new TestsRuntimeError(t);
         }
 
+        doTailCallOptimizationTest(wholeFile);
         doBytecodeListingTest(wholeFile);
     }
 
@@ -69,31 +70,7 @@ public abstract class AbstractBlackBoxCodegenTest extends CodegenTestCase {
                 ? "_1_2" : "";
         File expectedFile = new File(wholeFile.getParent(), FilesKt.getNameWithoutExtension(wholeFile) + suffix + ".txt");
 
-        String text =
-                BytecodeListingTextCollectingVisitor.Companion.getText(
-                        classFileFactory,
-                        new BytecodeListingTextCollectingVisitor.Filter() {
-                            @Override
-                            public boolean shouldWriteClass(int access, @NotNull String name) {
-                                return !name.startsWith("helpers/");
-                            }
-
-                            @Override
-                            public boolean shouldWriteMethod(int access, @NotNull String name, @NotNull String desc) {
-                                return true;
-                            }
-
-                            @Override
-                            public boolean shouldWriteField(int access, @NotNull String name, @NotNull String desc) {
-                                return true;
-                            }
-
-                            @Override
-                            public boolean shouldWriteInnerClass(@NotNull String name) {
-                                return true;
-                            }
-                        }
-                );
+        String text = getBytecodeListingTextWithoutCoroutineHelpers();
 
         assertEqualsToFile(expectedFile, text, s -> s.replace("COROUTINES_PACKAGE", coroutinesPackage));
     }
