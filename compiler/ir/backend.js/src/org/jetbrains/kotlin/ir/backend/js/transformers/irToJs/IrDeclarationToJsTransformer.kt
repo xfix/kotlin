@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.js.backend.ast.JsEmpty
 import org.jetbrains.kotlin.js.backend.ast.JsStatement
 import org.jetbrains.kotlin.js.backend.ast.JsVars
 
+@Suppress("PARAMETER_NAME_CHANGED_ON_OVERRIDE")
 class IrDeclarationToJsTransformer : BaseIrElementToJsNodeTransformer<JsStatement, JsGenerationContext> {
 
     override fun visitSimpleFunction(declaration: IrSimpleFunction, context: JsGenerationContext): JsStatement {
@@ -36,7 +37,7 @@ class IrDeclarationToJsTransformer : BaseIrElementToJsNodeTransformer<JsStatemen
     }
 
     override fun visitField(declaration: IrField, context: JsGenerationContext): JsStatement {
-        val fieldName = context.getNameForSymbol(declaration.symbol)
+        val fieldName = context.getNameForField(declaration)
 
         if (declaration.isExternal) return JsEmpty
 
