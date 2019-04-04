@@ -5,24 +5,17 @@
 
 package org.jetbrains.kotlin.gradle.testing
 
-import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.internal.plugins.DslObject
 import org.gradle.api.reporting.ReportingExtension
-import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.Internal
-import org.gradle.api.tasks.TaskAction
-import org.gradle.api.tasks.testing.*
-import org.gradle.internal.logging.ConsoleRenderer
-import org.gradle.internal.logging.progress.ProgressLoggerFactory
+import org.gradle.api.tasks.testing.AbstractTestTask
+import org.gradle.api.tasks.testing.TestTaskReports
 import org.gradle.language.base.plugins.LifecycleBasePlugin
 import org.gradle.testing.base.plugins.TestingBasePlugin
 import org.jetbrains.kotlin.gradle.plugin.TaskHolder
 import org.jetbrains.kotlin.gradle.tasks.KotlinTestTask
 import org.jetbrains.kotlin.gradle.tasks.locateOrRegisterTask
-import org.jetbrains.kotlin.gradle.utils.injected
 import java.io.File
-import javax.inject.Inject
 
 @Suppress("UnstableApiUsage")
 internal val Project.testResultsDir: File
@@ -36,19 +29,27 @@ internal val Project.testReportsDir: File
     get() = reportsDir.resolve(TestingBasePlugin.TESTS_DIR_NAME)
 
 internal fun KotlinTestTask.configureConventions() {
-    val htmlReport = DslObject(reports.html)
-    val xmlReport = DslObject(reports.junitXml)
-
-    xmlReport.conventionMapping.map("destination") { project.testResultsDir.resolve(name) }
-    htmlReport.conventionMapping.map("destination") { project.testReportsDir.resolve(name) }
+    reports.configureConventions(project, name)
     conventionMapping.map("binResultsDir") { project.testResultsDir.resolve("$name/binary") }
 }
 
-internal val Project.aggregateTestReportTask: TaskHolder<AggregateTestReport>
-    get() = locateOrRegisterTask("aggregateTestReport") {
-        tasks.maybeCreate(LifecycleBasePlugin.CHECK_TASK_NAME).dependsOn(it)
+internal fun TestTaskReports.configureConventions(project: Project, name: String) {
+    val htmlReport = DslObject(html)
+    val xmlReport = DslObject(junitXml)
 
-        it.destinationDir = testReportsDir.resolve("all")
+    xmlReport.conventionMapping.map("destination") { project.testResultsDir.resolve(name) }
+    htmlReport.conventionMapping.map("destination") { project.testReportsDir.resolve(name) }
+}
+
+internal val Project.allTestsTask: TaskHolder<AggregateTestReport>
+    get() = locateOrRegisterTask("allTests") { aggregate ->
+        tasks.maybeCreate(LifecycleBasePlugin.CHECK_TASK_NAME).dependsOn(aggregate)
+
+        aggregate.reports.configureConventions(project, "all")
+
+        aggregate.onlyIf {
+            aggregate.testTasks.size > 1
+        }
     }
 
 @Suppress("UnstableApiUsage")
@@ -56,18 +57,24 @@ internal fun registerTestTask(task: AbstractTestTask) {
     val project = task.project
     project.tasks.maybeCreate(LifecycleBasePlugin.CHECK_TASK_NAME).dependsOn(task)
 
-    val aggregateTestReportTask = project.aggregateTestReportTask.doGetTask()
-    aggregateTestReportTask.dependsOn(task)
-    aggregateTestReportTask.registerTestTask(task)
+    val allTests = project.allTestsTask.doGetTask()
+    allTests.dependsOn(task)
+    allTests.registerTestTask(task)
 
     project.gradle.taskGraph.whenReady {
-        if (it.hasTask(aggregateTestReportTask)) {
+        if (it.hasTask(allTests)) {
+            // when [allTestsTask] task enabled
+            // let all tests be executed even on failed tests
+            // let all failed test be reported by [allTestsTask]:
+            // - disable all reporting in test tasks
+            // - enable [checkFailedTests] on [allTestsTask]
+
             task.ignoreFailures = true
             task.reports.html.isEnabled = false
             task.reports.junitXml.isEnabled = false
 
-            aggregateTestReportTask.printStats = true
-            aggregateTestReportTask.ignoreFailures = false
+            allTests.checkFailedTests = true
+            allTests.ignoreFailures = false
         }
     }
 }
