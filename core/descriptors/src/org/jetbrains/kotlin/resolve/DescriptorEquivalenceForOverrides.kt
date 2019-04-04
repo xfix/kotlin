@@ -71,6 +71,7 @@ object DescriptorEquivalenceForOverrides {
         if (a == b) return true
         if (a.name != b.name) return false
         if (a.containingDeclaration == b.containingDeclaration) {
+            return false
             if (a.singleSource() != b.singleSource()) return false
         }
 
