@@ -87,13 +87,13 @@ internal class TCServiceMessagesClient(
         }
 
         val parsedName = ParsedTestName(finalTestName, parent.localId)
-        val methodName = if (settings.testNameSuffix == null) parsedName.methodName
+        val fullTestName = if (settings.testNameSuffix == null) parsedName.methodName
         else "${parsedName.methodName}[${settings.testNameSuffix}]"
 
         open(
             ts, TestNode(
-                parent, parsedName.className, parsedName.classDisplayName, methodName,
-                displayName = methodName,
+                parent, parsedName.className, parsedName.classDisplayName, parsedName.methodName,
+                displayName = fullTestName,
                 localId = testName,
                 ignored = isIgnored
             )
