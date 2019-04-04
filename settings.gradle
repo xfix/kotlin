@@ -21,7 +21,7 @@ include ":kotlin-build-common",
         ":compiler:util",
         ":daemon-common",
         ":daemon-common-new",
-        ":daemon",
+        ":kotlin-daemon",
         ":kotlin-daemon-client",
         ":kotlin-daemon-client-new",
         ":kotlin-preloader",
@@ -274,6 +274,7 @@ project(':kotlin-preloader').projectDir = "$rootDir/compiler/preloader" as File
 project(':kotlin-build-common').projectDir = "$rootDir/build-common" as File
 project(':compiler:cli-common').projectDir = "$rootDir/compiler/cli/cli-common" as File
 project(':kotlin-runner').projectDir = "$rootDir/compiler/cli/cli-runner" as File
+project(':kotlin-daemon').projectDir = "$rootDir/compiler/daemon" as File
 project(':daemon-common').projectDir = "$rootDir/compiler/daemon/daemon-common" as File
 project(':daemon-common-new').projectDir = "$rootDir/compiler/daemon/daemon-common-new" as File
 project(':kotlin-daemon-client').projectDir = "$rootDir/compiler/daemon/daemon-client" as File

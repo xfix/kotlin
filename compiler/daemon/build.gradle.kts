@@ -17,11 +17,9 @@ jvmTarget = "1.8"
 val ktorExcludesForDaemon : List<Pair<String, String>> by rootProject.extra
 
 dependencies {
-    compileOnly(project(":"))
-
     compile(project(":compiler:cli"))
+    compile(project(":daemon-common-new"))
     compile(project(":compiler:incremental-compilation-impl"))
-    compile(project(":kotlin-build-common"))
     compile(commonDep("org.fusesource.jansi", "jansi"))
     compile(commonDep("org.jline", "jline"))
     compileOnly(project(":kotlin-scripting-compiler"))
@@ -29,6 +27,7 @@ dependencies {
     runtime(project(":kotlin-reflect"))
 
     embeddedComponents(project(":daemon-common")) { isTransitive = false }
+    embeddedComponents(project(":daemon-common-new")) { isTransitive = false }
     compile(commonDep("org.jetbrains.kotlinx", "kotlinx-coroutines-jdk8")) {
         isTransitive = false
     }
