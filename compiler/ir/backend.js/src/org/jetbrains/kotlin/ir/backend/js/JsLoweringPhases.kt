@@ -333,6 +333,13 @@ private val callsLoweringPhase = makeJsModulePhase(
     description = "Handle intrinsics"
 )
 
+private val staticMembersLoweringPhase = makeJsModulePhase(
+    ::StaticMembersLowering,
+    name = "StaticMembersLowering",
+    description = "Move static member declarations to top-level"
+)
+
+
 val jsPhases = namedIrModulePhase(
     name = "IrModuleLowering",
     description = "IR module lowering",
@@ -375,5 +382,6 @@ val jsPhases = namedIrModulePhase(
             blockDecomposerLoweringPhase then
             primitiveCompanionLoweringPhase then
             constLoweringPhase then
-            callsLoweringPhase
+            callsLoweringPhase then
+            staticMembersLoweringPhase
 )
