@@ -16,7 +16,6 @@
 
 package org.jetbrains.kotlinx.serialization.compiler.backend.common
 
-import org.jetbrains.kotlin.descriptors.CallableMemberDescriptor
 import org.jetbrains.kotlin.descriptors.ClassConstructorDescriptor
 import org.jetbrains.kotlin.descriptors.ClassDescriptor
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
@@ -57,7 +56,3 @@ abstract class SerializableCodegen(
 
     }
 }
-
-// todo: move to another file
-fun ClassConstructorDescriptor.isSerializationCtor(): Boolean =
-    kind == CallableMemberDescriptor.Kind.SYNTHESIZED && valueParameters.lastOrNull()?.name == SerialEntityNames.dummyParamName
