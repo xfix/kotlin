@@ -48,19 +48,11 @@ class KotlinImportOptimizer : ImportOptimizer {
     override fun supports(file: PsiFile?) = file is KtFile
 
     override fun processFile(file: PsiFile?): Runnable {
-        val ktFile = (file as? KtFile)
-
-        val preparedImports =
-            if (ktFile != null) {
-                prepareImports(ktFile)
-            } else {
-                null
-            }
+        val ktFile = (file as? KtFile) ?: return Runnable { /* empty runnable */ }
+        val preparedImports = prepareImports(ktFile) ?: return Runnable { /* empty runnable */ }
 
         return Runnable {
-            if (ktFile != null && preparedImports != null) {
-                replaceImports(ktFile, preparedImports)
-            }
+            replaceImports(ktFile, preparedImports)
         }
     }
 
