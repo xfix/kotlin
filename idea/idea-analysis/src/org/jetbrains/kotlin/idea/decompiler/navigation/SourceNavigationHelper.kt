@@ -191,8 +191,8 @@ object SourceNavigationHelper {
         index: StringStubIndexExtension<T>
     ): T? {
         val classFqName = entity.fqName ?: return null
-        return targetScopes(entity, navigationKind).firstNotNullResult {
-            index.get(classFqName.asString(), entity.project, it).firstOrNull()
+        return targetScopes(entity, navigationKind).firstNotNullResult { scope ->
+            index.get(classFqName.asString(), entity.project, scope).sortedBy { it.isExpectDeclaration() }.firstOrNull()
         }
     }
 
