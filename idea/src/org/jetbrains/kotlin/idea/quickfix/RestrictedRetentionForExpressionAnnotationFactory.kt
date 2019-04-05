@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.builtins.KotlinBuiltIns
 import org.jetbrains.kotlin.diagnostics.Diagnostic
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.core.ShortenReferences
+import org.jetbrains.kotlin.idea.references.resolveMainReferenceToDescriptors
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.containingClass
@@ -28,9 +29,10 @@ object RestrictedRetentionForExpressionAnnotationFactory : KotlinIntentionAction
         val containingClass = annotationEntry.containingClass() ?: return emptyList()
         val retentionAnnotation = containingClass.annotation(KotlinBuiltIns.FQ_NAMES.retention)
         val targetAnnotation = containingClass.annotation(KotlinBuiltIns.FQ_NAMES.target)
+        val expressionTargetArgument = if (targetAnnotation != null) findExpressionTargetArgument(targetAnnotation) else null
 
         return listOfNotNull(
-            if (targetAnnotation != null) RemoveExpressionTargetFix(targetAnnotation) else null,
+            if (expressionTargetArgument != null) RemoveExpressionTargetFix(expressionTargetArgument) else null,
             if (retentionAnnotation == null) AddSourceRetentionFix(containingClass) else ChangeRetentionToSourceFix(retentionAnnotation)
         )
     }
@@ -40,6 +42,20 @@ object RestrictedRetentionForExpressionAnnotationFactory : KotlinIntentionAction
             it.typeReference?.text?.endsWith(fqName.shortName().asString()) == true
                     && analyze()[BindingContext.TYPE, it.typeReference]?.constructor?.declarationDescriptor?.fqNameSafe == fqName
         }
+    }
+
+    private fun findExpressionTargetArgument(targetAnnotation: KtAnnotationEntry): KtValueArgument? {
+        val valueArgumentList = targetAnnotation.valueArgumentList ?: return null
+        if (targetAnnotation.lambdaArguments.isNotEmpty()) return null
+
+        for (valueArgument in valueArgumentList.arguments) {
+            val argumentExpression = valueArgument.getArgumentExpression() ?: continue
+            if (argumentExpression.text.contains("EXPRESSION")) {
+                return valueArgument
+            }
+        }
+
+        return null
     }
 
     private class AddSourceRetentionFix(element: KtClass) : KotlinQuickFixAction<KtClass>(element) {
@@ -78,16 +94,23 @@ object RestrictedRetentionForExpressionAnnotationFactory : KotlinIntentionAction
         }
     }
 
-    private class RemoveExpressionTargetFix(targetAnnotation: KtAnnotationEntry) :
-        KotlinQuickFixAction<KtAnnotationEntry>(targetAnnotation) {
+    private class RemoveExpressionTargetFix(expressionTargetArgument: KtValueArgument) :
+        KotlinQuickFixAction<KtValueArgument>(expressionTargetArgument) {
 
         override fun getText() = "Remove EXPRESSION target"
 
         override fun getFamilyName() = text
 
         override fun invoke(project: Project, editor: Editor?, file: KtFile) {
-            val targetAnnotation = element ?: return
-            targetAnnotation.delete()
+            val expressionTargetArgument = element ?: return
+            val argumentList = expressionTargetArgument.parent as? KtValueArgumentList ?: return
+
+            if (argumentList.arguments.size == 1) {
+                val annotation = argumentList.parent as? KtAnnotationEntry ?: return
+                annotation.delete()
+            } else {
+                argumentList.removeArgument(expressionTargetArgument)
+            }
         }
     }
 }
