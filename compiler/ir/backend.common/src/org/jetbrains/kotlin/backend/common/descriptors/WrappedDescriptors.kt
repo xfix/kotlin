@@ -941,3 +941,42 @@ open class WrappedFieldDescriptor(
 
     override fun <V : Any?> getUserData(key: CallableDescriptor.UserDataKey<V>?): V? = null
 }
+
+class WrappedVariableDescriptorWithAccessors
+    : VariableDescriptorWithAccessors, WrappedCallableDescriptor<IrLocalDelegatedProperty>(Annotations.EMPTY, SourceElement.NO_SOURCE) {
+    override val getter: VariableAccessorDescriptor?
+        get() = error("Don't ask wrapped descriptor for so many details.")
+    override val setter: VariableAccessorDescriptor?
+        get() = error("Don't ask wrapped descriptor for so many details.")
+    override val isDelegated: Boolean
+        get() = error("Don't ask wrapped descriptor for so many details.")
+
+    override fun getContainingDeclaration() = (owner.parent as IrFunction).descriptor
+    override fun getType() = owner.type.toKotlinType()
+    override fun getReturnType() = getType()
+    override fun getName() = owner.name
+    override fun isConst() = false
+    override fun isVar() = owner.isVar
+    override fun isLateInit() = false
+
+    override fun getCompileTimeInitializer(): ConstantValue<*>? {
+        TODO("")
+    }
+
+    override fun getOverriddenDescriptors(): Collection<VariableDescriptor> {
+        TODO("Not Implemented")
+    }
+
+    override fun getOriginal() = this
+
+    override fun substitute(substitutor: TypeSubstitutor): VariableDescriptor {
+        TODO("")
+    }
+
+    override fun <R, D> accept(visitor: DeclarationDescriptorVisitor<R, D>?, data: D): R =
+        visitor!!.visitVariableDescriptor(this, data)
+
+    override fun acceptVoid(visitor: DeclarationDescriptorVisitor<Void, Void>?) {
+        visitor!!.visitVariableDescriptor(this, null)
+    }
+}
