@@ -2438,6 +2438,11 @@ public class FirDiagnosticsSmokeTestGenerated extends AbstractFirDiagnosticsSmok
                 runTest("compiler/testData/diagnostics/tests/callableReference/resolve/postponedResolveOfManyCallableReference.kt");
             }
 
+            @TestMetadata("resolveCallableReferencesAfterAllSimpleArguments.kt")
+            public void testResolveCallableReferencesAfterAllSimpleArguments() throws Exception {
+                runTest("compiler/testData/diagnostics/tests/callableReference/resolve/resolveCallableReferencesAfterAllSimpleArguments.kt");
+            }
+
             @TestMetadata("resolveEqualsOperatorWithAnyExpectedType.kt")
             public void testResolveEqualsOperatorWithAnyExpectedType() throws Exception {
                 runTest("compiler/testData/diagnostics/tests/callableReference/resolve/resolveEqualsOperatorWithAnyExpectedType.kt");
