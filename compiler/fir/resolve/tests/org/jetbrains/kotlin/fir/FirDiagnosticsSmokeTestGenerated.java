@@ -2328,6 +2328,11 @@ public class FirDiagnosticsSmokeTestGenerated extends AbstractFirDiagnosticsSmok
                 runTest("compiler/testData/diagnostics/tests/callableReference/resolve/byValType.kt");
             }
 
+            @TestMetadata("chooseCallableReferenceDependingOnInferredReceiver.kt")
+            public void testChooseCallableReferenceDependingOnInferredReceiver() throws Exception {
+                runTest("compiler/testData/diagnostics/tests/callableReference/resolve/chooseCallableReferenceDependingOnInferredReceiver.kt");
+            }
+
             @TestMetadata("chooseOuterCallBySingleCallableReference.kt")
             public void testChooseOuterCallBySingleCallableReference() throws Exception {
                 runTest("compiler/testData/diagnostics/tests/callableReference/resolve/chooseOuterCallBySingleCallableReference.kt");
