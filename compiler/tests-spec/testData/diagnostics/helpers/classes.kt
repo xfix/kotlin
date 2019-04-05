@@ -5,8 +5,11 @@ class Class {
     val prop_4: Float? = 3f
     val prop_5: Float = 3f
     val prop_6: String = "..."
-    val prop_7: Nothing? = "..."
-    val prop_8: Class? = "..."
+    val prop_7: Nothing? = null
+    val prop_8: Class? = null
+    var prop_9: Boolean = true
+    val prop_10: Number? = 3f
+    val prop_11: Int = 10
 
     fun fun_1(): (Int) -> (Int) -> Int = {number: Int -> { number * 5 }}
     fun fun_2(value_1: Int): Int = value_1 * 2
@@ -30,6 +33,10 @@ class Class {
         val prop_4 = 4
         val prop_5 = 5
     }
+}
+
+open class ClassWithCustomEquals {
+    override fun equals(other: Any?) = true
 }
 
 class EmptyClass {}
@@ -60,6 +67,7 @@ class ClassLevel6: ClassLevel5() {
 class Inv<T>(val x: T = null as T) {
     val prop_1: Inv<T>? = null
     val prop_2: T? = null
+    val prop_3: T = null
 
     fun test() {}
     fun get() = x
@@ -84,10 +92,15 @@ open class ClassWithTwoTypeParameters<K, L> {
     fun test2(): K? { return null }
 }
 
-class ClassWithThreeTypeParameters<K, L, M>(
+open class ClassWithThreeTypeParameters<K, L, M>(
     val x: K,
     val y: L,
     val z: M
 )
 
-class ClassWithSixTypeParameters<K, in L, out M, O, in P, out R>
+open class ClassWithSixTypeParameters<K, in L, out M, O, in P, out R>(
+    val u: R,
+    val x: K,
+    val y: M,
+    val z: O
+)
