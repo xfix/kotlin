@@ -9,9 +9,11 @@ import org.gradle.api.DefaultTask
 import org.gradle.api.file.FileCollection
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputDirectory
-import org.gradle.api.tasks.OutputFiles
 import org.gradle.api.tasks.TaskAction
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
+import org.jetbrains.kotlin.gradle.plugin.sources.KotlinDependencyScope.API_SCOPE
+import org.jetbrains.kotlin.gradle.plugin.sources.KotlinDependencyScope.IMPLEMENTATION_SCOPE
+import org.jetbrains.kotlin.gradle.targets.metadata.ALL_COMPILE_METADATA_CONFIGURATION_NAME
 import org.jetbrains.kotlin.gradle.utils.isParentOf
 import java.io.File
 import javax.inject.Inject
@@ -19,14 +21,19 @@ import javax.inject.Inject
 open class TransformKotlinGranularMetadata
 @Inject constructor(
     @get:Internal
-    val kotlinSourceSet: KotlinSourceSet,
-
-    @get:OutputDirectory
-    val outputsDir: File
+    val kotlinSourceSet: KotlinSourceSet
 ) : DefaultTask() {
 
+    @get:OutputDirectory
+    val outputsDir: File = project.buildDir.resolve("kotlinSourceSetMetadata/${kotlinSourceSet.name}")
+
     private val transformation =
-        GranularMetadataTransformation(project, kotlinSourceSet)
+        GranularMetadataTransformation(
+            project,
+            kotlinSourceSet,
+            listOf(API_SCOPE, IMPLEMENTATION_SCOPE),
+            listOf(project.configurations.getByName(ALL_COMPILE_METADATA_CONFIGURATION_NAME))
+        )
 
     @get:Internal
     internal val metadataDependencyTransformationResults: Iterable<MetadataDependencyResolution>
@@ -35,22 +42,20 @@ open class TransformKotlinGranularMetadata
     @get:Internal
     internal val filesByDependency: Map<out MetadataDependencyResolution, FileCollection>
         get() = metadataDependencyTransformationResults.filterIsInstance<MetadataDependencyResolution.ChooseVisibleSourceSets>()
-            .associate { it to project.files(it.getMetadataFiles(outputsDir, doProcessFiles = false)) }
-
-    @Suppress("UNUSED")
-    @get:OutputFiles
-    val allOutputFiles: Iterable<FileCollection>
-        get() = filesByDependency.values
+            .associate { it to project.files(it.getMetadataFilesBySourceSet(outputsDir, doProcessFiles = false).values) }
 
     @TaskAction
     fun transformMetadata() {
-        transformation.lazyTransform
+        if (outputsDir.isDirectory) {
+            outputsDir.deleteRecursively()
+        }
+        outputsDir.mkdirs()
 
         // Access all replacement files to trigger metadata extraction.
         metadataDependencyTransformationResults
             .filterIsInstance<MetadataDependencyResolution.ChooseVisibleSourceSets>()
             .forEach { result ->
-                val resultFiles = result.getMetadataFiles(outputsDir, doProcessFiles = true)
+                val resultFiles = result.getMetadataFilesBySourceSet(outputsDir, doProcessFiles = true)
 
                 if (result.projectDependency == null) {
                     // Also assert that all files extracted from non-project dependencies are placed inside [outputsDir],

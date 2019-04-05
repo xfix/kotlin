@@ -13,7 +13,6 @@ import org.jetbrains.kotlin.gradle.plugin.KotlinCompilation
 import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
 import org.jetbrains.kotlin.gradle.plugin.KotlinTargetComponent
 import org.jetbrains.kotlin.gradle.plugin.usageByName
-import org.jetbrains.kotlin.gradle.targets.metadata.METADATA_DEPENDENCY_ELEMENTS_CONFIGURATION_NAME
 import org.jetbrains.kotlin.gradle.utils.isGradleVersionAtLeast
 
 
@@ -28,12 +27,6 @@ open class KotlinMetadataTarget(project: Project) : KotlinOnlyTarget<KotlinCommo
             compilations.getByName(KotlinCompilation.MAIN_COMPILATION_NAME),
             project.usageByName(apiUsage),
             apiElementsConfigurationName
-        )
-
-        usageContexts += DefaultKotlinUsageContext(
-            compilations.getByName(KotlinCompilation.MAIN_COMPILATION_NAME),
-            project.usageByName(apiUsage),
-            METADATA_DEPENDENCY_ELEMENTS_CONFIGURATION_NAME
         )
 
         val component =

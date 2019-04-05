@@ -5,14 +5,17 @@
 
 package org.jetbrains.kotlin.gradle.plugin.mpp
 
+import org.gradle.api.Project
 import org.gradle.api.tasks.Input
+import org.jetbrains.kotlin.gradle.dsl.multiplatformExtensionOrNull
+import org.jetbrains.kotlin.gradle.targets.metadata.getPublishedPlatformCompilations
 import org.w3c.dom.Document
 import org.w3c.dom.Element
 import org.w3c.dom.Node
 import org.w3c.dom.NodeList
 import javax.xml.parsers.DocumentBuilderFactory
 
-internal data class KotlinProjectStructureMetadata(
+data class KotlinProjectStructureMetadata(
     @Input
     val sourceSetNamesByVariantName: Map<String, Set<String>>,
 
@@ -22,6 +25,29 @@ internal data class KotlinProjectStructureMetadata(
     @Input
     val sourceSetModuleDependencies: Map<String, Set<Pair<String, String>>>
 )
+
+internal fun buildKotlinProjectStructureMetadata(project: Project): KotlinProjectStructureMetadata? {
+    val sourceSetsWithMetadataCompilations =
+        project.multiplatformExtensionOrNull?.targets?.getByName(KotlinMultiplatformPlugin.METADATA_TARGET_NAME)?.compilations?.associate {
+            it.defaultSourceSet to it
+        } ?: return null
+
+    val publishedVariantsNamesWithCompilation = getPublishedPlatformCompilations(project).mapKeys { it.key.name }
+
+    return KotlinProjectStructureMetadata(
+        sourceSetNamesByVariantName = publishedVariantsNamesWithCompilation.mapValues { (_, compilation) ->
+            compilation.allKotlinSourceSets.filter { it in sourceSetsWithMetadataCompilations }.map { it.name }.toSet()
+        },
+        sourceSetsDependsOnRelation = sourceSetsWithMetadataCompilations.keys.associate { sourceSet ->
+            sourceSet.name to sourceSet.dependsOn.filter { it in sourceSetsWithMetadataCompilations }.map { it.name }.toSet()
+        },
+        sourceSetModuleDependencies = sourceSetsWithMetadataCompilations.keys.associate { sourceSet ->
+            sourceSet.name to project.configurations.getByName(sourceSet.apiConfigurationName).allDependencies.map {
+                it.group.orEmpty() to it.name
+            }.toSet()
+        }
+    )
+}
 
 internal fun KotlinProjectStructureMetadata.toXmlDocument(): Document {
     val document = DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().apply {
