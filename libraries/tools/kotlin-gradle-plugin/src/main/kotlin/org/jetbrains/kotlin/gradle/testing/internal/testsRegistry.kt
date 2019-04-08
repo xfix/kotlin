@@ -48,9 +48,8 @@ internal fun registerTestTask(task: AbstractTestTask) {
 
     project.gradle.taskGraph.whenReady {
         if (it.hasTask(allTests)) {
-            // when [allTestsTask] task enabled
-            // let all tests be executed even on failed tests
-            // let all failed test be reported by [allTestsTask]:
+            // when [allTestsTask] task enabled, test failure should be reported only on [allTestsTask],
+            // not at individual target's test tasks. To do that, we need:
             // - disable all reporting in test tasks
             // - enable [checkFailedTests] on [allTestsTask]
 
@@ -63,12 +62,5 @@ internal fun registerTestTask(task: AbstractTestTask) {
         }
     }
 
-    if (System.getProperty("idea.active") != null) {
-        if (task !is KotlinJvmTestTask) {
-            task.extensions.extraProperties.set("idea.internal.test", true)
-            val listener = IjTestListener()
-            task.addTestOutputListener(listener)
-            task.addTestListener(listener)
-        }
-    }
+    ijListenTestTask(task)
 }

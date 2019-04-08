@@ -5,15 +5,16 @@
 
 package org.jetbrains.kotlin.gradle.testing.internal
 
-import com.intellij.openapi.util.text.StringUtil.escapeXml
 import org.gradle.api.internal.tasks.testing.TestDescriptorInternal
 import org.gradle.api.tasks.testing.*
 import org.gradle.api.tasks.testing.TestOutputEvent.Destination.StdErr
 import org.gradle.api.tasks.testing.TestOutputEvent.Destination.StdOut
 import org.gradle.api.tasks.testing.TestResult.ResultType.*
+import org.jetbrains.kotlin.gradle.targets.jvm.tasks.KotlinJvmTestTask
 import org.jetbrains.kotlin.gradle.testing.KotlinTestFailure
 import java.util.*
 
+@Suppress("unused")
 class IjTestListener : TestListener, TestOutputListener {
     private val TestDescriptor.id
         get() = (this as TestDescriptorInternal).id.toString()
@@ -174,4 +175,20 @@ class IjTestListener : TestListener, TestOutputListener {
     private fun ByteArray.base64() = String(Base64.getEncoder().encode(this))
 
     private fun String.asCData() = "<![CDATA[${toByteArray().base64()}]]>"
+
+    companion object {
+        @Suppress("unused")
+        @JvmStatic
+        fun attachTo(task: AbstractTestTask) {
+            if (System.getProperty("idea.active") != null) {
+                if (task !is KotlinJvmTestTask) {
+                    task.extensions.extraProperties.set("idea.internal.test", true)
+                    val listener = IjTestListener()
+                    task.addTestListener(listener)
+                    task.addTestOutputListener(listener)
+                    task.testLogging.showStandardStreams = false
+                }
+            }
+        }
+    }
 }
